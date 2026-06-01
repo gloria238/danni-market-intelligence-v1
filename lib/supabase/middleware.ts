@@ -40,8 +40,8 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Redirect authenticated users away from login
-  if (request.nextUrl.pathname === "/login" && user) {
+  // Redirect authenticated users away from auth pages
+  if ((request.nextUrl.pathname === "/login" || request.nextUrl.pathname === "/register") && user) {
     return NextResponse.redirect(new URL("/research", request.url));
   }
 

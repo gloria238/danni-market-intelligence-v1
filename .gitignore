@@ -28,6 +28,9 @@ Thumbs.db
 npm-debug.log*
 pnpm-debug.log*
 
+# Chinese manual — not for version control
+docs/
+
 # Database
 *.sqlite
 *.sqlite3

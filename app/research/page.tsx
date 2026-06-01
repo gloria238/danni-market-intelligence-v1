@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowUp, Sparkles, Loader2, LogOut } from "lucide-react";
+import { ArrowUp, Loader2, LogOut, Sparkles } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -17,15 +17,22 @@ interface Message {
   data?: ResearchOutput;
 }
 
+const EXAMPLES = [
+  "Why is BTC rising today?",
+  "What's driving gold to all-time highs?",
+  "Is the dollar weakness structural?",
+  "How to position for rate cuts?",
+];
+
 export default function ResearchPage() {
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const router = useRouter();
 
-  // Check auth on mount
   useEffect(() => {
     const check = async () => {
       const supabase = createClient();
@@ -83,6 +90,7 @@ export default function ResearchPage() {
       toast.error(err.message || "Something went wrong");
     } finally {
       setLoading(false);
+      inputRef.current?.focus();
     }
   };
 
@@ -96,53 +104,53 @@ export default function ResearchPage() {
   if (!authChecked) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-muted" />
+        <Loader2 className="h-5 w-5 animate-spin text-muted" />
       </div>
     );
   }
 
   return (
     <div className="flex min-h-screen flex-col">
-      {/* Header */}
-      <header className="flex items-center justify-between border-b border-border px-6 py-3">
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-5 w-5 text-accent" />
-          <span className="font-semibold text-sm tracking-tight">
-            Danni Research Terminal
+      {/* Header — minimal, premium */}
+      <header className="flex items-center justify-between px-6 py-3.5 border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-10">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-subtle border border-accent/20">
+            <Sparkles className="h-4 w-4 text-accent" />
+          </div>
+          <span className="font-semibold text-sm tracking-tight text-foreground">
+            Danni Research
           </span>
         </div>
         <button
           onClick={handleLogout}
-          className="flex items-center gap-1 text-xs text-muted hover:text-foreground transition-colors"
+          className="flex items-center gap-1.5 text-xs text-muted hover:text-foreground-secondary transition-colors px-3 py-1.5 rounded-lg hover:bg-surface"
         >
           <LogOut className="h-3 w-3" />
           Sign out
         </button>
       </header>
 
-      {/* Messages area */}
-      <div className="flex-1 overflow-y-auto px-4 py-6">
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto px-4 py-8">
         {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center pt-32 text-center">
-            <Sparkles className="mb-4 h-8 w-8 text-muted" />
-            <h2 className="text-xl font-semibold mb-2">
+          /* Empty state — centered, minimal */
+          <div className="flex flex-col items-center justify-center pt-24 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-surface-elevated border border-border mb-6">
+              <Sparkles className="h-8 w-8 text-accent" />
+            </div>
+            <h2 className="text-2xl font-bold tracking-tight mb-2">
               Ask a Market Question
             </h2>
-            <p className="text-sm text-muted max-w-md">
-              Example: &quot;Why is Bitcoin rising today?&quot; or &quot;What is
-              driving the S&P 500 sell-off?&quot;
+            <p className="text-sm text-foreground-secondary max-w-sm mb-8">
+              Get a structured investment memo with narratives, evidence, and
+              risk analysis.
             </p>
-            <div className="mt-6 flex flex-wrap justify-center gap-2">
-              {[
-                "Why is BTC rising?",
-                "What's driving gold to all-time highs?",
-                "Is the dollar weakness structural?",
-                "How to position for rate cuts?",
-              ].map((example) => (
+            <div className="flex flex-wrap justify-center gap-2">
+              {EXAMPLES.map((example) => (
                 <button
                   key={example}
                   onClick={() => setQuestion(example)}
-                  className="rounded-full border border-border px-3 py-1.5 text-xs text-muted hover:text-foreground hover:border-muted transition-colors"
+                  className="rounded-lg border border-border bg-surface px-3.5 py-2 text-xs text-foreground-secondary hover:text-foreground hover:border-border-light hover:bg-surface-hover transition-all"
                 >
                   {example}
                 </button>
@@ -150,13 +158,15 @@ export default function ResearchPage() {
             </div>
           </div>
         ) : (
-          <div className="mx-auto max-w-3xl space-y-6">
+          <div className="mx-auto max-w-3xl space-y-8">
             {messages.map((msg) => (
               <div key={msg.id}>
                 {msg.role === "user" ? (
                   <div className="flex justify-end">
-                    <div className="max-w-[80%] rounded-2xl rounded-br-md bg-accent/15 border border-accent/20 px-4 py-3">
-                      <p className="text-sm">{msg.content}</p>
+                    <div className="max-w-[75%] rounded-2xl rounded-br-md bg-accent-subtle border border-accent/20 px-5 py-3.5">
+                      <p className="text-sm text-foreground leading-relaxed">
+                        {msg.content}
+                      </p>
                     </div>
                   </div>
                 ) : (
@@ -165,11 +175,10 @@ export default function ResearchPage() {
               </div>
             ))}
 
-            {/* Loading indicator */}
             {loading && (
-              <div className="flex items-center gap-2 text-muted">
+              <div className="flex items-center gap-2.5 text-muted animate-in">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                <span className="text-sm">Analyzing markets...</span>
+                <span className="text-sm">Analyzing markets…</span>
               </div>
             )}
 
@@ -178,11 +187,12 @@ export default function ResearchPage() {
         )}
       </div>
 
-      {/* Input area */}
-      <div className="border-t border-border px-4 py-4">
+      {/* Input bar — floating, premium */}
+      <div className="border-t border-border bg-background px-4 py-5 sticky bottom-0">
         <div className="mx-auto max-w-3xl">
-          <div className="relative flex items-start gap-2">
+          <div className="relative flex items-start">
             <Textarea
+              ref={inputRef}
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
               onKeyDown={(e) => {
@@ -191,8 +201,8 @@ export default function ResearchPage() {
                   handleSubmit();
                 }
               }}
-              placeholder="Ask a market question..."
-              className="min-h-[52px] resize-none pr-12"
+              placeholder="Ask a market question…"
+              className="min-h-[56px] resize-none pr-14 rounded-2xl bg-surface border-border text-sm placeholder:text-muted focus-visible:border-accent/40 focus-visible:ring-1 focus-visible:ring-accent/30 transition-all"
               rows={1}
               disabled={loading}
             />
@@ -200,7 +210,7 @@ export default function ResearchPage() {
               size="icon"
               onClick={handleSubmit}
               disabled={loading || !question.trim()}
-              className="absolute right-2 top-2 h-8 w-8"
+              className="absolute right-2 top-2 h-10 w-10 rounded-xl bg-accent hover:bg-accent-hover text-white shadow-lg shadow-accent/25 hover:shadow-xl hover:shadow-accent/30 transition-all disabled:opacity-30 disabled:shadow-none"
             >
               {loading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -209,7 +219,7 @@ export default function ResearchPage() {
               )}
             </Button>
           </div>
-          <p className="mt-2 text-xs text-muted text-center">
+          <p className="mt-2.5 text-xs text-muted text-center">
             Press Enter to submit · Shift+Enter for new line
           </p>
         </div>

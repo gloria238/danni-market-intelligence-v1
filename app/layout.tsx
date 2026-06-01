@@ -4,7 +4,13 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Danni Research Terminal",
-  description: "AI-Powered Market Research Platform",
+  description:
+    "AI-Powered Market Research. Ask any market question and receive a structured investment memo.",
+  openGraph: {
+    title: "Danni Research Terminal",
+    description:
+      "AI-Powered Market Research. Ask any market question and receive a structured investment memo.",
+  },
 };
 
 export default function RootLayout({
@@ -14,16 +20,17 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark">
-      <body className="min-h-screen antialiased">
+      <body className="min-h-screen antialiased bg-background text-foreground">
         {children}
         <Toaster
           position="bottom-right"
           theme="dark"
           toastOptions={{
             style: {
-              background: "#131316",
-              border: "1px solid #1e1e24",
-              color: "#fafafa",
+              background: "oklch(0.16 0.015 258)",
+              border: "1px solid oklch(0.24 0.015 258)",
+              color: "oklch(0.96 0.003 260)",
+              fontSize: "0.8125rem",
             },
           }}
         />

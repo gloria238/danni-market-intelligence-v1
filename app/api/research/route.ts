@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateResearch } from "@/lib/ai";
+import { detectIntent } from "@/lib/intent";
 import {
   fetchMarketSnapshot,
   fetchNewsHeadlines,
@@ -21,14 +22,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Fetch market context in parallel
+    // 1. Detect intent — normalize before the LLM ever sees it
+    const intent = detectIntent(question.trim());
+
+    // 2. Fetch market context in parallel
     const [snapshot, headlines] = await Promise.all([
       fetchMarketSnapshot().catch(() => null),
       fetchNewsHeadlines().catch(() => []),
     ]);
 
     const marketCtx: MarketContext = { snapshot, headlines };
-    const result = await generateResearch(question.trim(), marketCtx);
+
+    // 3. Generate — passes intent to the prompt builder
+    const result = await generateResearch(question.trim(), marketCtx, intent);
 
     return NextResponse.json(result);
   } catch (error: any) {

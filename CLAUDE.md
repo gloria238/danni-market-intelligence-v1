@@ -75,5 +75,41 @@ Login and Register are TWO pages, never one page with a toggle.
 
 Why: Different UX. Register needs password confirmation, strength validation, success state with email instructions. Login is minimal — just get the user in. Combining them creates unnecessary state complexity and a worse experience for both flows.
 
+## 5c. Query Intent over Literal Matching
+
+Never answer a user's question literally if the premise is wrong. Always interpret intent.
+
+```
+User: "Why is BTC rising today?"
+BTC is actually down 1.27% today.
+
+❌ "BTC is not rising. It is down 1.27%."      ← Correct. Also useless.
+✅ "Market Analysis: BTC is trading at $72,906, down 1.27%.
+   The key narratives influencing BTC right now are..."  ← Answers what they MEANT.
+```
+
+Implementation: `lib/intent.ts` — rule-based. Detects "why + asset + direction" patterns, rewrites as market analysis, injects factCheckNote into prompt. Not AI. Just regex.
+
+## 5d. Narrative Activation Conditions
+
+A narrative can only appear if its data source is available. Never show "USD Weakness 65%" with "DXY: N/A".
+
+- Each narrative has `requiredDataSources: string[]`
+- Before prompt: only active narratives go to the LLM
+- After LLM response: suppressed narratives are filtered out
+- Suppressed narratives are shown in a "Data-Limited Narratives" section in the UI
+
+## 5e. Qualitative Confidence, Not Fake Percentages
+
+Until a real scoring formula exists, confidence labels are "High" / "Medium" / "Low" — NEVER percentages.
+
+```
+❌ USD Weakness: 65%          ← User asks "why 65?" — system can't answer
+✅ USD Weakness: Medium        ← Honest about what's happening (LLM judgment)
+```
+
+`lib/ai.ts` type: `ConfidenceLevel = "High" | "Medium" | "Low"`
+`memo-renderer.tsx`: renders as a colored badge, not a number + progress bar
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 

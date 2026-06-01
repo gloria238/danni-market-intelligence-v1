@@ -1,6 +1,6 @@
 "use client";
 
-import type { ResearchOutput } from "@/lib/ai";
+import type { ResearchOutput, ConfidenceLevel } from "@/lib/ai";
 import { cn } from "@/lib/utils";
 import {
   TrendingUp,
@@ -12,31 +12,49 @@ import {
   ShieldAlert,
   Lightbulb,
   Layers,
+  AlertTriangle,
+  Info,
 } from "lucide-react";
 
 /* ——— Sub-components ——— */
 
-function ConfidenceBar({ value, height }: { value: number; height?: "sm" | "md" }) {
-  const h = height === "sm" ? "h-1" : "h-1.5";
+const CONFIDENCE_META: Record<
+  ConfidenceLevel,
+  { label: string; color: string; bg: string; border: string }
+> = {
+  High: {
+    label: "High",
+    color: "text-success",
+    bg: "bg-success-subtle",
+    border: "border-success/20",
+  },
+  Medium: {
+    label: "Medium",
+    color: "text-warning",
+    bg: "bg-warning-subtle",
+    border: "border-warning/20",
+  },
+  Low: {
+    label: "Low",
+    color: "text-danger",
+    bg: "bg-danger-subtle",
+    border: "border-danger/20",
+  },
+};
+
+function ConfidenceBadge({ level }: { level: ConfidenceLevel }) {
+  const meta = CONFIDENCE_META[level];
   return (
-    <div className="flex items-center gap-2.5">
-      <div className={cn("flex-1 rounded-full bg-border overflow-hidden", h)}>
-        <div
-          className={cn(
-            "h-full rounded-full transition-all duration-1000 ease-out",
-            value >= 70
-              ? "bg-success"
-              : value >= 40
-                ? "bg-warning"
-                : "bg-danger"
-          )}
-          style={{ width: `${value}%` }}
-        />
-      </div>
-      <span className="text-xs font-mono text-muted tabular-nums w-9 text-right">
-        {value}%
-      </span>
-    </div>
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider border",
+        meta.color,
+        meta.bg,
+        meta.border
+      )}
+    >
+      {meta.label}
+    </span>
   );
 }
 
@@ -72,6 +90,8 @@ function SectionHeader({
 export function MemoRenderer({ data }: { data: ResearchOutput }) {
   if (!data) return null;
 
+  const overallMeta = CONFIDENCE_META[data.confidence];
+
   return (
     <div className="glass-card p-6 space-y-7 animate-in">
       {/* === Executive Summary === */}
@@ -83,19 +103,32 @@ export function MemoRenderer({ data }: { data: ResearchOutput }) {
               Research Memo
             </h3>
           </div>
-          {data.market_context_used && (
-            <span className="inline-flex items-center gap-1.5 text-[11px] text-success bg-success-subtle rounded-full px-2.5 py-0.5 font-medium">
-              <Database className="h-3 w-3" />
-              Live data
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {data.premise_corrected && (
+              <span className="inline-flex items-center gap-1 text-[11px] text-warning bg-warning-subtle rounded-full px-2.5 py-0.5 font-medium border border-warning/20">
+                <AlertTriangle className="h-3 w-3" />
+                Premise adjusted
+              </span>
+            )}
+            {data.market_context_used ? (
+              <span className="inline-flex items-center gap-1.5 text-[11px] text-success bg-success-subtle rounded-full px-2.5 py-0.5 font-medium border border-success/20">
+                <Database className="h-3 w-3" />
+                Live data
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-[11px] text-warning bg-warning-subtle rounded-full px-2.5 py-0.5 font-medium border border-warning/20">
+                <Info className="h-3 w-3" />
+                No live data
+              </span>
+            )}
+          </div>
         </div>
         <p className="text-[15px] font-medium leading-relaxed text-foreground">
           {data.summary}
         </p>
       </div>
 
-      {/* === Key Narratives (bento grid cards) === */}
+      {/* === Key Narratives === */}
       {data.narratives.length > 0 && (
         <section className="space-y-4">
           <SectionHeader icon={Layers} label="Key Narratives" />
@@ -104,32 +137,28 @@ export function MemoRenderer({ data }: { data: ResearchOutput }) {
             {data.narratives.map((n, i) => (
               <div
                 key={n.id}
-                className="group rounded-xl border border-border bg-surface-elevated p-5 space-y-4 transition-all hover:border-border-light hover:bg-surface-hover"
+                className={cn(
+                  "group rounded-xl border p-5 space-y-4 transition-all",
+                  n.confidence === "Low"
+                    ? "border-warning/20 bg-surface-elevated opacity-75"
+                    : "border-border bg-surface-elevated hover:border-border-light hover:bg-surface-hover"
+                )}
               >
                 {/* Header row */}
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1.5">
                       <span className="text-[11px] font-mono text-muted tabular-nums">
                         {String(i + 1).padStart(2, "0")}
                       </span>
                       <h5 className="text-sm font-bold tracking-tight text-foreground">
                         {n.name}
                       </h5>
+                      <ConfidenceBadge level={n.confidence} />
                     </div>
                     <p className="text-xs text-foreground-secondary leading-relaxed">
                       {n.reasoning}
                     </p>
-                  </div>
-
-                  {/* Confidence gauge */}
-                  <div className="shrink-0 flex flex-col items-center">
-                    <span className="text-2xl font-mono font-bold text-foreground tabular-nums">
-                      {n.confidence}
-                    </span>
-                    <span className="text-[10px] text-muted uppercase tracking-widest">
-                      %
-                    </span>
                   </div>
                 </div>
 
@@ -156,9 +185,13 @@ export function MemoRenderer({ data }: { data: ResearchOutput }) {
                             <p
                               className={cn(
                                 "text-xs font-mono font-semibold truncate leading-tight mt-0.5",
-                                ind.signal === "bullish" && "text-success",
-                                ind.signal === "bearish" && "text-danger",
-                                ind.signal === "neutral" && "text-foreground-secondary"
+                                ind.value === "N/A"
+                                  ? "text-muted italic"
+                                  : ind.signal === "bullish"
+                                    ? "text-success"
+                                    : ind.signal === "bearish"
+                                      ? "text-danger"
+                                      : "text-foreground-secondary"
                               )}
                             >
                               {ind.value}
@@ -169,10 +202,31 @@ export function MemoRenderer({ data }: { data: ResearchOutput }) {
                     </div>
                   </div>
                 )}
-
-                <ConfidenceBar value={n.confidence} height="sm" />
               </div>
             ))}
+          </div>
+        </section>
+      )}
+
+      {/* === Suppressed Narratives === */}
+      {data.suppressed_narratives.length > 0 && (
+        <section>
+          <SectionHeader icon={AlertTriangle} label="Data-Limited Narratives" />
+          <div className="rounded-lg border border-warning/20 bg-warning-subtle/50 px-4 py-3">
+            <p className="text-xs text-foreground-secondary leading-relaxed">
+              The following narratives were identified but could not be assessed
+              with sufficient confidence due to missing data sources:
+            </p>
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {data.suppressed_narratives.map((id) => (
+                <span
+                  key={id}
+                  className="inline-flex items-center rounded-md bg-surface border border-border px-2 py-0.5 text-[10px] font-mono text-muted"
+                >
+                  {id}
+                </span>
+              ))}
+            </div>
           </div>
         </section>
       )}
@@ -217,7 +271,7 @@ export function MemoRenderer({ data }: { data: ResearchOutput }) {
         </section>
       )}
 
-      {/* === Overall Confidence (footer bar) === */}
+      {/* === Overall Confidence === */}
       <div className="border-t border-border pt-5">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
@@ -226,27 +280,13 @@ export function MemoRenderer({ data }: { data: ResearchOutput }) {
               Overall Confidence
             </span>
           </div>
-          <span
-            className={cn(
-              "text-lg font-mono font-bold tabular-nums",
-              data.confidence_score >= 70
-                ? "text-success"
-                : data.confidence_score >= 40
-                  ? "text-warning"
-                  : "text-danger"
-            )}
-          >
-            {data.confidence_score}%
-          </span>
+          <ConfidenceBadge level={data.confidence} />
         </div>
-        <ConfidenceBar value={data.confidence_score} />
-        <p className="mt-3 text-xs text-muted leading-relaxed">
-          {data.confidence_score >= 70
-            ? "Multiple converging signals support this analysis with high conviction."
-            : data.confidence_score >= 40
-              ? "Mixed signals — monitor closely and await confirmation before acting."
-              : "Elevated uncertainty — this thesis has limited supporting evidence. Position size accordingly."}
-        </p>
+        <div className={cn("rounded-lg border px-4 py-3", overallMeta.bg, overallMeta.border)}>
+          <p className={cn("text-xs leading-relaxed", overallMeta.color)}>
+            {data.confidence_rationale}
+          </p>
+        </div>
       </div>
     </div>
   );

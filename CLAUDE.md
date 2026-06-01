@@ -49,6 +49,31 @@ For multi-step tasks, state a brief plan:
 3. [Step] → verify: [check]
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
+5. Project-Specific Conventions (never break these)
+
+## 5a. Email Confirmation Redirect
+
+NEVER hardcode a URL for Supabase `emailRedirectTo`. Always use `window.location.origin` — it works everywhere automatically.
+
+```
+✅ emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirect)}`
+❌ emailRedirectTo: `https://danni-terminal.vercel.app/auth/callback`
+❌ emailRedirectTo: `http://localhost:3000/auth/callback`
+❌ emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`
+```
+
+This is a client component (`"use client"`), so `window.location.origin` is always available and always correct — localhost in dev, vercel.app in production, custom domain if added later. No env variable needed. No configuration. It just works.
+
+## 5b. Auth Pages Are Separate Pages
+
+Login and Register are TWO pages, never one page with a toggle.
+
+- `/login` — Sign In only (email + password → sign in)
+- `/register` — Create Account only (email + password + confirm password → sign up)
+- Both pages link to each other via explicit navigation buttons
+- No `isSignUp` state toggle. No in-place switching. No single-page combined form.
+
+Why: Different UX. Register needs password confirmation, strength validation, success state with email instructions. Login is minimal — just get the user in. Combining them creates unnecessary state complexity and a worse experience for both flows.
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 

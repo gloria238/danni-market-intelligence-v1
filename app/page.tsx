@@ -32,7 +32,7 @@ export default function LandingPage() {
 
         {/* Headline */}
         <div className="space-y-4">
-          <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
+          <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl lg:text-6xl whitespace-nowrap">
             Danni Research Terminal
           </h1>
           <p className="text-lg text-foreground-secondary leading-relaxed max-w-lg mx-auto">

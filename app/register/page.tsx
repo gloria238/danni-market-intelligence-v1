@@ -29,8 +29,6 @@ function CreateAccountForm() {
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") ?? "/research";
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
-
   const passwordMinLength = 8;
   const passwordValid = password.length >= passwordMinLength;
   const passwordsMatch = password === confirmPassword && confirmPassword.length > 0;
@@ -55,7 +53,7 @@ function CreateAccountForm() {
       email,
       password,
       options: {
-        emailRedirectTo: `${siteUrl}/auth/callback?next=${encodeURIComponent(redirect)}`,
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirect)}`,
       },
     });
 

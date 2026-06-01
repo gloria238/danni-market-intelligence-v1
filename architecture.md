@@ -188,7 +188,7 @@ research_messages
 ```
 1. User visits /research → middleware checks JWT → redirects to /login
 2. Sign In: email/password → Supabase auth → JWT cookie set → /research
-3. Sign Up: /register → email/password → confirmation email → /auth/callback → JWT → /research
+3. Sign Up: /register → email/password → confirmation email (redirect URL = `window.location.origin`/auth/callback) → code exchange → JWT → /research
 4. Session refresh: middleware.ts on every request
 ```
 
@@ -257,7 +257,6 @@ Handles Supabase email confirmation redirect. Exchanges `code` for session JWT, 
 |----------|----------|--------|
 | `NEXT_PUBLIC_SUPABASE_URL` | Yes | Supabase Dashboard → Settings → API |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Supabase Dashboard → Settings → API (anon key) |
-| `NEXT_PUBLIC_SITE_URL` | Yes | Production URL for email redirect |
 | `DEEPSEEK_API_KEY` | Yes | DeepSeek Platform → API Keys |
 | `DIRECT_URL` | Dev only | Supabase → Direct connection string |
 | `DATABASE_URL` | Yes | Supabase → Transaction pooler |

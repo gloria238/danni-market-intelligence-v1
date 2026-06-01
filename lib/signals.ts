@@ -57,6 +57,15 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     sourceId: "ethereum",
   },
 
+  // CoinGecko — uses tokenized gold (XAUT/PAXG) as proxy for spot gold
+  GOLD_PRICE: {
+    id: "GOLD_PRICE",
+    label: "Gold Price",
+    description: "Gold price via tokenized gold proxy (tether-gold, 1 XAUT ≈ 1 oz gold)",
+    source: "coingecko",
+    sourceId: "tether-gold",
+  },
+
   // FRED — free API key required (https://fred.stlouisfed.org/docs/api/api_key.html)
   DXY_INDEX: {
     id: "DXY_INDEX",
@@ -86,14 +95,6 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     source: "fred",
     sourceId: "FEDFUNDS",
   },
-  GOLD_PRICE: {
-    id: "GOLD_PRICE",
-    label: "Gold Price",
-    description: "Gold Fixing Price in USD (London PM)",
-    source: "fred",
-    sourceId: "GOLDAMGBD228NLBR",
-  },
-
   // Farside — free, no key (ETF flow data)
   BTC_ETF_FLOW: {
     id: "BTC_ETF_FLOW",

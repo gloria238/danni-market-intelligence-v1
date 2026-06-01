@@ -81,7 +81,7 @@ function valueSignal(id: string, rawValue: number, format: string): SignalValue 
 async function fetchCoinGecko(): Promise<Record<string, SignalValue>> {
   const signals: Record<string, SignalValue> = {};
   const res = await safeFetch(
-    "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd&include_24hr_change=true"
+    "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,tether-gold&vs_currencies=usd&include_24hr_change=true"
   );
   if (!res) return signals;
 
@@ -107,6 +107,13 @@ async function fetchCoinGecko(): Promise<Record<string, SignalValue>> {
       "ETH_PRICE",
       data.ethereum.usd,
       `$${data.ethereum.usd.toLocaleString()}`
+    );
+  }
+  if (data?.["tether-gold"]?.usd != null) {
+    signals.GOLD_PRICE = valueSignal(
+      "GOLD_PRICE",
+      data["tether-gold"].usd,
+      `$${data["tether-gold"].usd.toLocaleString()}`
     );
   }
 
@@ -156,11 +163,9 @@ async function fetchFred(): Promise<Record<string, SignalValue>> {
   for (const { id, val } of results) {
     if (val != null) {
       const format =
-        id === "GOLD_PRICE"
-          ? `$${val.toFixed(2)}`
-          : id.includes("YIELD") || id.includes("RATE")
-            ? `${val.toFixed(2)}%`
-            : val.toFixed(2);
+        id.includes("YIELD") || id.includes("RATE")
+          ? `${val.toFixed(2)}%`
+          : val.toFixed(2);
       signals[id] = valueSignal(id, val, format);
     }
   }

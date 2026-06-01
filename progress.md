@@ -1,6 +1,6 @@
-# Danni Research Terminal — Progress Log
+# Danni Market Intelligence Terminal — Progress Log
 
-> **Start date:** 2026-06-01 · **Status:** In active development
+> **Start date:** 2026-06-01 · **Current version:** V2.0 · **14 commits**
 
 ---
 
@@ -12,146 +12,150 @@
 - ❌ "Market Intelligence = ChatGPT + market data"
 - ✅ "Market Intelligence = structured financial knowledge + AI reasoning"
 
-**V1 scope defined:**
-- Single page: `/research`
-- Single flow: question → structured memo
-- No Dashboard, no RAG, no Multi-Agent, no WebSocket, no Redis
+**V1 scope defined:** Single page `/research`. Single flow: question → memo. No Dashboard, RAG, Multi-Agent, WebSocket, Redis.
 
 ---
 
 ## Phase 1 — Zero-to-Working (2026-06-01)
 
-**Commit:** `c83263b` — V1.1: Danni Research Terminal
+**Commit:** `c83263b`
 
-**What was built:**
-- Next.js 15 project initialized (App Router, TypeScript, Tailwind 4)
-- Supabase project connected (`dannifinance` schema, `pynprilsdbvgxyyzjtif`)
-- Database migration: `research_sessions` + `research_messages` tables with RLS
-- `/` landing page — hero headline + feature pills + CTA
-- `/login` — email/password auth via Supabase
-- `/research` — chat UI with question input + message list
-- `/api/research` — POST endpoint → DeepSeek → structured JSON
-- `components/research/memo-renderer.tsx` — JSON → professional memo card
-- `lib/ai.ts` — DeepSeek client with system prompt + `ResearchOutput` type
-- `lib/supabase/middleware.ts` — session refresh + route protection
-- Auth callback route for email confirmation
-
-**Verification:** Build passes. API returns structured JSON with summary, narratives, evidence, risks, confidence_score.
+**Built:** Next.js 15, Supabase (`dannifinance` schema), DB migration (2 tables + RLS), `/` landing, `/login` auth, `/research` chat UI, `/api/research` POST endpoint, `memo-renderer.tsx`, DeepSeek client, middleware session refresh. Build passes. API returns structured JSON.
 
 ---
 
 ## Phase 2 — Narrative Definition Layer + Context (2026-06-01)
 
-**Commit:** `c83263b` (same commit, included)
+**Commit:** `c83263b` (same)
 
-**What was built:**
-- `lib/narratives.ts` — 10 pre-defined narrative definitions, each with:
-  - Unique ID, display name, description
-  - Indicator list (4 per narrative)
-  - Prompt context for the LLM
-- `lib/market-data.ts` — Context Augmentation Layer (NOT RAG):
-  - CoinGecko free API → BTC/ETH real-time price + 24h change
-  - NewsAPI free tier → 8 latest headlines
-  - 8-second timeout, graceful degradation
-  - `formatMarketContextForPrompt()` — compact prompt block
-- System prompt rewritten to:
-  - Inject Narrative Registry into system prompt
-  - Require narratives matched from registry (no free invention)
-  - Inject real-time market context
-  - Require per-narrative indicator evidence
-
-**UI upgraded:**
-- Each narrative card shows per-indicator evidence grid
-- Bull/bear/neutral signal icons per indicator
-- "Live data" badge when market context available
-- Confidence bars on each narrative + overall
+**Built:** `lib/narratives.ts` (10 pre-defined narratives with indicators + prompt context), `lib/market-data.ts` (CoinGecko + NewsAPI context layer, NOT RAG), system prompt rewritten to inject narrative registry + market context. UI: per-indicator evidence grids, bull/bear/neutral icons, "Live data" badge.
 
 ---
 
 ## Phase 3 — Premium Design System (2026-06-01)
 
-**Commit:** `3475c5b` — V1.1.1: Premium dark theme
+**Commit:** `3475c5b`
 
-**What was built:**
-- Design overhaul using `ui-ux-pro-max` reference data
-- Color palette sourced from Financial Dashboard + Coding Bootcamp primitives:
-  - Deep navy-black background (`oklch(0.12 0.02 260)`)
-  - Trust blue accent (`oklch(0.58 0.22 265)`)
-  - Conviction green indicators (`oklch(0.65 0.19 155)`)
-- All colors migrated to `oklch` — perceptually uniform, no hardcoded hex
-- 4-level surface depth: background → surface → surface-hover → surface-elevated
-- Glass cards with multi-layer box-shadows (dimensional layering style)
-- Custom scrollbar, text selection, focus ring — all themed
-- `animate-in` keyframes (fade + slide-up) with `prefers-reduced-motion` respect
-- shadcn/ui primitives migrated from default CSS vars to custom design tokens:
-  - `components/ui/button.tsx` — accent blue, surface variants
-  - `components/ui/input.tsx` — surface background, accent focus ring
-  - `components/ui/textarea.tsx` — rounded-lg, surface bg
-  - `components/ui/card.tsx` — glass-card spec
-
-**Pages redesigned:**
-- Landing: oversized headline, 3-feature bento grid, accent CTA with glow shadow
-- Research: sticky frosted header, empty-state icon + examples, floating input with accent send button
-- Memo: bento narrative cards with inner indicator grids, section icons, hover states
+**Built:** Design overhaul using `ui-ux-pro-max`. oklch-based color tokens (Financial Dashboard + Coding Bootcamp primitives). Deep navy-black bg, trust blue accent, conviction green indicators. 4-level surface depth. Glass cards with multi-layer shadows. shadcn/ui primitives migrated to custom tokens. Landing/research/memo pages redesigned.
 
 ---
 
 ## Phase 4 — Auth UX + Email Redirect Fix (2026-06-01)
 
-**Commit:** `fbad1ad` — V1.1.2: Separate auth pages
+**Commit:** `fbad1ad`
 
-**What was built:**
-- `/login` (Sign In) and `/register` (Create Account) split into separate pages
-- Register page features:
-  - Password confirmation with match validation
-  - Real-time validation hints ("Passwords match" / "Must be at least 8 characters")
-  - Password visibility toggle (Eye/EyeOff icons) on both password fields
-  - Red border on mismatch, green on match
-  - Success state with email instructions card (replaces `alert()`)
-  - `NEXT_PUBLIC_SITE_URL` used for email redirect URL (not `window.location.origin`)
-- Auth callback fixed: cookies set on `response` object before `exchangeCodeForSession`
-- Middleware updated to redirect authenticated users away from both `/login` and `/register`
+**Built:** `/login` and `/register` split into separate pages. Register: password confirmation, validation hints, visibility toggle, success state. Email redirect via `window.location.origin`. Auth callback fixed.
 
 ---
 
 ## Phase 5 — Font Loading Fix (2026-06-01)
 
-**Commit:** `7a669f8` — V1.1.3: Font loading
+**Commit:** `7a669f8`
 
-**What was fixed:**
-- Inter and JetBrains Mono now loaded via `next/font/google` with `display: swap`
-- CSS variable chain: next/font sets `--font-inter` → globals.css sets `--font-sans: var(--font-inter), ...`
-- Removed broken `border-radius: 2px` from global `*:focus-visible`
-- Layout applies font CSS variables to `<html>` for full DOM tree coverage
+**Fixed:** Inter + JetBrains Mono via `next/font/google` with `display: swap`. CSS variable chain properly connected. Removed broken `border-radius:2px` on global `*:focus-visible`.
 
 ---
 
-## What V1 Explicitly Excludes
+## Phase 6 — Product Quality: Intent, Activation, Qualitative Confidence (2026-06-01)
+
+**Commit:** `a3e959c` — V1.2
+
+**Built:**
+- `lib/intent.ts` — Query Intent Layer. Rule-based normalization. Detects "why + asset + direction" patterns. Rewrites as market analysis when premise contradicts facts.
+- Narrative activation conditions — narratives only appear when required data sources are available. Suppressed narratives shown in "Data-Limited Narratives" UI section.
+- Qualitative confidence (High/Medium/Low) replaces fake percentages. No more "65%" when the system can't explain why 65.
+
+---
+
+## Phase 7 — Signal-Coverage Architecture (2026-06-01)
+
+**Commits:** `04f19f6` (V1.3), `44f8b19` (gold fix)
+
+**Built:**
+- Signal Registry: 11 atomic signals with sources + direction from multi-point context
+- Data Source Layer: CoinGecko + FRED (DXY, US10Y, US2Y, Fed Funds) + Farside (ETF flow) + NewsAPI. All parallel, 8s timeout, graceful degradation.
+- Narrative Registry rewritten with required/enhancing signal split. Coverage computed from signal availability.
+- Gold source fixed: CoinGecko tether-gold (XAUT), not FRED (FRED gold series doesn't exist). FRED DXY and US10Y verified working.
+
+---
+
+## Phase 8 — Signal Taxonomy: Hard Gates + Directional Logic (2026-06-01)
+
+**Commit:** `3aa29c7` — V1.4
+
+**Built:**
+- Hard gates: ALL required signals present → "Assessable". Missing ANY → "Not Assessable". Binary, no sliding scale.
+- Signal ≠ Evidence enforced. BTC price is NOT evidence of institutional buying. Each narrative's indicators constrained to its signal set.
+- Directional data pipeline: FRED fetches 30 observations, derives direction from two most recent numeric. CoinGecko uses 24h_change for direction. Farside compares today vs yesterday.
+- Direction tags per indicator: ▲▼—. Live/Est provenance. Assessable badge replaces old confidence labels.
+
+---
+
+## Phase 9 — Divergence Engine (2026-06-01)
+
+**Commit:** `6fcbf84` — V1.5
+
+**Built:** `lib/expectations.ts` — 7 signal pair expectations (DXY↔BTC, US10Y↔BTC, Gold↔DXY, ETF↔BTC, US10Y↔DXY, Gold↔BTC, US2Y↔US10Y). Pure computation divergence detector. Cross-signal summary synthesizer. LLM prompt leads with divergence story. UI: Cross-Signal Analysis section with severity-graded divergence cards, confirmed relationships, directional assessment arrows.
+
+---
+
+## Phase 10 — Severity Scoring + Attribution + Resolution + Scanner (2026-06-01)
+
+**Commit:** `c14bea3` — V2.0
+
+**Built:**
+
+**V1.6 — Numeric severity + attribution:**
+- `lib/betas.ts` — 4 beta coefficients (DXY→BTC -2.5, US10Y→BTC -0.6, ETF→BTC +0.3, Gold→BTC +0.6)
+- `lib/ranking.ts` — Severity scoring 0.0–10.0: w_correlation × w_magnitude × penalty
+- `lib/attribution.ts` — BTC move decomposition into factor contributions. Explained% vs unexplained%. Ratio flags when >80% of move is unexplained.
+- `lib/signals.ts` — SignalValue gains `delta` + `previousValue`. SignalDef gains `typicalStdDev`.
+- `lib/market-data.ts` — Delta/previousValue populated from all sources.
+
+**V1.7 — Divergence history + resolution:**
+- `lib/db/schema.sql` — New `divergence_observations` table (14 columns, indexed, RLS)
+- `lib/db/divergence-store.ts` — CRUD, date-range queries, resolution stats per pair
+- `lib/resolution.ts` — Passive resolution checker. Compares yesterday's persisted divergences to today's data. Classifies: realigned_bullish, realigned_bearish, persisted, faded.
+- `app/api/divergences/route.ts` — GET historical records with pair/date filtering
+
+**V2 — Divergence Scanner:**
+- `app/divergences/page.tsx` — Scanner dashboard. Auto-scans on load. Ranked anomalies, confirmed relationships, attribution summary, not-assessable list. New post-login home.
+- `app/divergences/[pairId]/page.tsx` — Single-divergence deep dive with full memo.
+- `components/scanner/anomaly-card.tsx` — Reusable card: severity gauge, directional summary, unexplained move badge, resolution signal hint.
+- Middleware: `/divergences` protected. Post-login redirect → `/divergences` (scanner is home).
+- Landing CTA → "Open Scanner" → `/divergences`.
+
+---
+
+## What V2 Explicitly Excludes
 
 | Feature | Reason | When |
 |---------|--------|------|
-| Dashboard (TradingView, widgets) | Not core to memo value prop | V2 |
-| RAG (embeddings, vector search) | Over-engineering before proving chat works | V2 |
-| Multi-Agent orchestration | Latency + cost before proving single agent | V2 |
-| Narrative Registry expansion (20→50) | 10 sufficient for MVP | V2 |
-| News + market data persistence | In-memory context per request works | V2 |
-| Redis / BullMQ | No async processing needed | V2 |
-| FastAPI backend | Next.js API routes sufficient | V2 |
-| OpenAI / Claude fallback | DeepSeek works end-to-end | V2 |
-| Portfolio / Scenario Analysis | Separate product feature | V2+ |
-| WebSocket real-time | CoinGecko polling sufficient | V2+ |
-| Mobile app | Responsive web first | V3 |
+| Dashboard (TradingView, price grids) | Not core to intelligence value prop | V3 |
+| RAG (embeddings, vector search) | Context augmentation sufficient | V3 |
+| Multi-Agent orchestration | Single agent + structured prompt works | V3 |
+| Backtesting framework | Needs signal_history DB first | V3 |
+| Alert notifications (email/push) | Premature without DAU | V3 |
+| Portfolio tracker | Different product category | Never (V1) |
+| Real-time WebSocket | Polling sufficient for research cadence | V3+ |
+| Mobile app | Responsive web first | V4 |
+| Redis / BullMQ / cron jobs | Serverless architecture, resolution is passive | Never (V1) |
+| Custom narrative builder | Registry expands based on our data | V3 |
 
 ---
 
-## Current Status
+## Current Status (V2.0)
 
-- **4 commits** on `main`
-- **32 source files**, ~2,100 lines (excluding node_modules, generated files)
-- **9 routes** (landing, login, register, research, api/research, auth/callback, 404)
-- **10 narratives** with indicator definitions
-- **2 DB tables** with RLS
-- **Build:** ✅ Clean TypeScript compilation, all pages static/dynamic as appropriate
-- **API:** ✅ Returns structured JSON from DeepSeek with real-time market context
-- **Auth:** ✅ Sign in, sign up, email confirmation, JWT, RLS — full loop
-- **Design:** ✅ Premium dark theme, all design tokens oklch, fonts loaded via next/font
+- **14 commits** on `main`
+- **49 source files**, ~3,700 lines core logic
+- **11 routes** (landing, login, register, divergences, divergences/[id], research, api/research, api/divergences, auth/callback, 404)
+- **11 signals** across 4 data sources (CoinGecko, FRED, Farside, NewsAPI)
+- **10 narratives** with required/enhancing signal split + directional logic
+- **7 signal expectations** with correlation types + strength ratings
+- **4 beta coefficients** for move attribution
+- **3 DB tables** (sessions, messages, divergence_observations) with RLS
+- **Build:** ✅ Clean TypeScript, all 11 routes static/dynamic as appropriate
+- **API:** ✅ Question→Memo pipeline. Historical divergence data endpoint.
+- **Auth:** ✅ Sign in, sign up, email confirmation, JWT, RLS.
+- **Design:** ✅ Premium dark theme, oklch tokens, Inter + JetBrains Mono via next/font.
+- **Scanner:** ✅ Auto-scan on load, ranked anomalies, attribution decomposition, deep-dive per pair.

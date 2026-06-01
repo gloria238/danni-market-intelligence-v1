@@ -90,49 +90,90 @@ BTC is actually down 1.27% today.
 
 Implementation: `lib/intent.ts` — rule-based. Detects "why + asset + direction" patterns, rewrites as market analysis, injects factCheckNote into prompt. Not AI. Just regex.
 
-## 5d. Signal → Narrative Architecture (V1.4 — HARD GATES)
+## 5d. Signal → Divergence → Attribution → Narrative → Memo (5-layer stack)
 
-The product has three layers. Never collapse them.
+The product has five reasoning layers. Never collapse them. Never go straight from signals to LLM.
 
 ```
 Layer 1: SIGNALS (lib/signals.ts)
-  Atomic data points. Each has a source + DIRECTION (rising/falling/stable).
-  Never show a raw number without directional context. "4.45%" is useless.
-  "4.45% ▼ from 4.48% prior" is analysis-ready.
+  Atomic data points. Each has source + direction + delta + typicalStdDev.
 
-Layer 2: NARRATIVES (lib/narratives.ts)
-  Each narrative defines:
-    requiredSignals   — ALL must be present. Missing ANY → "Not Assessable"
-    enhancingSignals  — nice-to-have. More = richer analysis.
-    directionalLogic  — what signal pattern supports/contradicts the narrative
+Layer 2: DIVERGENCE DETECTION (lib/expectations.ts)
+  7 signal pair expectations. Pure computation. Output: confirmed + diverged.
 
-  HARD GATE: availableRequired.length === requiredSignals.length
-    → true  → "Assessable" (LLM can reason about this)
-    → false → "Not Assessable" (goes to UI as explanation, NOT to LLM)
+Layer 3: SEVERITY + ATTRIBUTION (lib/ranking.ts + lib/attribution.ts + lib/betas.ts)
+  Severity: numeric 0-10 per divergence. Attribution: BTC move decomposition.
 
-Layer 3: MEMO (lib/ai.ts → memo-renderer.tsx)
-  LLM only sees Assessable narratives. Not Assessable shown in separate section.
-  Each indicator tagged with: signal direction (▲▼ —), isLive vs Est, narrative provenance.
+Layer 4: NARRATIVES (lib/narratives.ts)
+  Hard gates. requiredSignals ALL present → Assessable. Otherwise → Not Assessable.
+
+Layer 5: MEMO (lib/ai.ts → memo-renderer.tsx)
+  LLM receives ALL of the above — not just signals. Divergence story leads the summary.
 ```
 
-### CRITICAL: Signal ≠ Evidence (V1.4+)
+### CRITICAL: Signal ≠ Evidence
 
-A signal can ONLY serve as evidence for a narrative if it appears in that
-narrative's requiredSignals or enhancingSignals. Never cross-wire.
+A signal can ONLY serve as evidence for a narrative if it appears in that narrative's requiredSignals or enhancingSignals.
 
 ```
 ❌ "BTC Price $72,802 → Institutional Buying"  ← BTC price is NOT evidence of institutional buying
 ✅ "BTC ETF Flow +$310M → Institutional Buying" ← ETF flow IS institutional buying evidence
 ```
 
-The LLM prompt and post-processing both enforce this. Indicators from a narrative
-must match its signal set. The system filters mismatches in ai.ts.
+### CRITICAL: All computation before LLM
 
-When adding a new narrative:
-1. Define the SIGNAL first (in SIGNAL_REGISTRY)
-2. Wire the signal to a data source (market-data.ts)
-3. THEN create the narrative referencing it
-4. Ask: "Is this signal genuinely evidence for this narrative?" If not, don't add it.
+Intent detection, divergence testing, severity scoring, move attribution — all in TypeScript. The LLM synthesizes findings, it does NOT detect them. Never ask the LLM "is there a divergence?" — compute it.
+
+### CRITICAL: Lead with the story, not the checklist
+
+The prompt rule is: "A divergence is more interesting than a confirmation." Never output "nothing significant" or "no narratives supported." There is always a story in the data relationships — find it.
+
+## 5e. Scanner is the Home Page (V2+)
+
+After login, users land on `/divergences` — not `/research`.
+
+- `/divergences` — Scanner Dashboard. Auto-scans on load. Ranked anomalies.
+- `/divergences/[pairId]` — Deep dive for one signal pair.
+- `/research` — Still accessible via nav. Chat-style Q&A memo.
+
+When adding a new page or feature, ask: "Does this belong on the scanner (proactive intelligence) or in the chat (deep-dive research)?"
+
+## 5f. Severity Scoring is Numeric, Not Qualitative
+
+Severity labels (Critical/Notable/Moderate/Minor) come from numeric scores — not the other way around.
+
+```
+Score formula: w_correlation × w_magnitude × penalty
+  w_correlation: 3.0(strong) | 2.0(moderate) | 1.0(tentative)
+  w_magnitude:   min(|delta_A/stdDev_A| + |delta_B/stdDev_B|, 5.0)
+  penalty:       1.5(divergence) | 1.0(confirmation)
+  Result clamped to [0, 10]
+
+Labels: ≥7.0 Critical · ≥5.0 Notable · ≥3.0 Moderate · <3.0 Minor
+```
+
+Never change the severity label without recomputing the score. Label follows formula — formula does not follow label.
+
+## 5g. Attribution Betas are Estimates, Not Precision
+
+Beta coefficients in `lib/betas.ts` are practitioner estimates. They are labelled as such.
+
+```
+✅ "~80% of today's BTC move is unexplained by available macro signals"
+❌ "The DXY-BTC beta is -2.500 with R²=0.83"
+```
+
+These are for the "explained vs unexplained" dichotomy — directionally useful, not statistically rigorous. Upgradable to rolling correlation when signal_history DB exists (V3).
+
+## 5h. Resolution is Passive, No Background Jobs
+
+Divergence resolution checking happens when the user opens the scanner. No cron, no worker, no Redis, no BullMQ.
+
+- Load yesterday's persisted divergences from DB
+- Compare to today's detection results
+- Update resolution fields in-place
+- Show resolved divergences in the scanner UI
+
+This keeps the system fully serverless (Vercel-compatible).
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-

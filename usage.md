@@ -1,18 +1,22 @@
-# Danni Research Terminal — User Manual
+# Danni Market Intelligence Terminal — User Manual
 
-> **Product:** AI-powered market research. Ask any market question. Get a structured investment memo.
+> **Product:** Cross-signal market intelligence. Auto-detected anomalies, structured investment memos.
 >
-> **V1:** `danni-terminal.vercel.app`
+> **V2:** `danni-terminal.vercel.app` — 14 commits, 11 routes, 11 signals, 7 expectations, 4 betas.
 
 ---
 
 ## What This Product Is
 
-Danni Research Terminal is **not** a trading platform, a charting tool, or a crypto price tracker.
+Danni Market Intelligence Terminal is a **market cognition tool** that automatically scans cross-market signals for anomalies — divergences between what *should* be happening and what *is* happening.
 
-It is a **market cognition tool**. You ask a question about markets. It returns a structured analysis: which narratives are driving price action, what evidence supports each hypothesis, what risks you should monitor, and how confident the analysis is.
+It does two things:
 
-Think of it as a **junior macro analyst that reads faster than you, writes in structured JSON, and never sleeps.**
+1. **Scanner** (`/divergences`) — Automatically detects unusual market signal relationships. No questions needed. Open the app, see what's unusual today.
+
+2. **Research Chat** (`/research`) — Ask any market question. Get a structured memo with narratives, evidence, risk factors, move attribution, and cross-signal analysis.
+
+Think of it as: **a junior macro analyst that scans 11 data signals, computes expectations vs observations, ranks anomalies by severity, and writes structured memos — automatically.**
 
 ---
 
@@ -22,217 +26,211 @@ Think of it as a **junior macro analyst that reads faster than you, writes in st
 - ❌ A price prediction machine
 - ❌ A replacement for your own judgment
 - ❌ A real-time execution platform
+- ❌ A K-line charting tool
+- ❌ A crypto price tracker
 
-It helps you _think_ about markets. It does not tell you what to do.
+It helps you *think* about markets. It does not tell you what to do.
+
+---
+
+## Quick Start
+
+### 1. Sign Up
+1. Go to `danni-terminal.vercel.app`
+2. Click **Open Scanner** or navigate to `/register`
+3. Enter email + password (min 8 chars) + confirm password
+4. Click **Create Account** → check email → click confirmation link
+5. You land on the **Scanner Dashboard** automatically
+
+### 2. Use the Scanner (automatic)
+- The scanner auto-runs on load — fetches 11 signals, detects divergences, ranks by severity
+- **Ranked Anomalies** — Sorted by severity score (0–10). Critical (≥7.0) at the top.
+- **Move Attribution** — Shows what % of BTC's move is explained by macro vs unexplained
+- **Confirmed Relationships** — Signal pairs behaving as expected
+- **Not Assessable** — Narratives with missing required data
+- Click any anomaly card → Deep Dive with full memo
+
+### 3. Use the Research Chat
+- Navigate to `/research` via the header link
+- Type any market question → Enter
+- Wait 5–15 seconds → Full structured memo
+
+---
+
+## Scanner Dashboard Anatomy
+
+```
+┌─────────────────────────────────────────────┐
+│  Today's Market Anomalies      6/10 signals  │
+├─────────────────────────────────────────────┤
+│                                             │
+│  ⚠ DXY vs BTC            [NOTABLE]  8.4/10 │  ← Severity score
+│  ─────────────────────────────────────────  │
+│  DXY ↓ normally → BTC ↑, but BTC ↓          │  ← Directional summary
+│  +3.8% unexplained · Resolve: BTC_ETF_FLOW  │  ← Attribution + hint
+│              [Deep Dive →]                  │  ← Click for full memo
+│                                             │
+│  ⚠ US10Y vs BTC           [MODERATE] 5.2/10│
+│  ...                                         │
+│                                             │
+│  ✓ Confirmed Relationships                  │
+│  Gold ↑ + DXY ↓ — as expected               │
+│                                             │
+│  Not Assessable (5)                         │
+│  ETF_FLOW missing: BTC_ETF_FLOW             │
+└─────────────────────────────────────────────┘
+```
+
+---
+
+## Memo Sections (Research Chat + Deep Dive)
+
+### 1. Executive Summary
+3–4 sentence takeaway. Leads with the most interesting finding — a divergence if one exists.
+
+### 2. Move Attribution (V2)
+Decomposes BTC's price movement into factor contributions:
+
+```
+BTC actual: -1.36%
+  DXY:      +0.20%  (DXY ↓ → should push BTC ↑)
+  US10Y:    +0.18%  (yields ↓ → should push BTC ↑)
+  ETF Flow: N/A
+  Gold:     +0.06%
+  ─────────────────
+  Explained: +0.44%
+  Unexplained: -1.80%  ← ⚠ crypto-specific factors dominant
+```
+
+### 3. Cross-Signal Analysis (V2)
+Seven signal pairs tested. Each divergence gets a numeric severity score (0–10). Confirmed relationships shown compactly.
+
+### 4. Key Narratives
+Ranked by data coverage. Each narrative shows:
+- **Coverage badge** — Assessable or Not Assessable
+- **Directional assessment** — What the signal pattern means
+- **Evidence grid** — Per-indicator data with ▲▼— direction + Live/Est provenance
+
+### 5. Supporting Evidence + Risk Factors
+Evidence references specific data values. Risks list what could invalidate the thesis.
+
+---
+
+## Severity Scores
+
+| Score | Label | Meaning |
+|-------|-------|---------|
+| ≥7.0 | Critical | Strong correlation pair with large magnitude divergence |
+| ≥5.0 | Notable | Meaningful divergence — warrants attention |
+| ≥3.0 | Moderate | Directional violation but low magnitude |
+| <3.0 | Minor | Weak signal or tentative relationship |
+
+**Severity is computed from:** correlation strength × signal magnitude × divergence penalty. It is a mathematical product of the data, not an LLM opinion.
+
+---
+
+## Unexplained Move Ratio
+
+| Ratio | Meaning |
+|-------|---------|
+| >1.0 | More of the move is unexplained than explained → crypto-specific factors dominant |
+| 0.5–1.0 | Macro explains roughly half the move |
+| <0.5 | Most of the move aligns with macro signals |
 
 ---
 
 ## User Personas
 
-### Persona 1 — The Independent Researcher
+### Persona 1 — Independent Researcher
+**Who:** Crypto-native analyst scanning for edge. Reads CT, Discord, Dune.
 
-**Who:** A crypto-native analyst, DeFi strategist, or macro-curious investor who spends hours reading CT (Crypto Twitter), Discord, and Dune dashboards.
+**Workflow:** Opens scanner each morning → checks top anomalies → clicks deep dive on anything ≥7.0 severity → uses research chat for follow-up questions.
 
-**Pain point:** Information overload. Thousands of data points, no structured way to separate signal from noise.
-
-**Use case:**
-- Morning routine: "What happened in crypto overnight?"
-- Before a trade: "Why is ETH underperforming BTC?"
-- Macro check: "How are rate expectations shifting?"
-
-**Value:** Saves 30–60 minutes of manual synthesis per query. Structured output forces disciplined thinking.
+**Value:** Saves 30–60 minutes of manual cross-asset correlation checking.
 
 ---
 
-### Persona 2 — The Portfolio Manager / Fund Analyst
+### Persona 2 — Fund Analyst / Portfolio Manager
+**Who:** Writes investment memos for internal or client use.
 
-**Who:** Works at a crypto fund, family office, or wealth management desk. Needs to write investment memos for internal decision-making or client communication.
+**Workflow:** Opens scanner → checks unexplained move ratio → if >1.0, investigates via deep dive → copies structured memo as first draft for internal note.
 
-**Pain point:** Writing market commentary is repetitive, time-consuming, and inconsistent in quality.
-
-**Use case:**
-- Weekly market review: "Summarize this week's key crypto narratives."
-- Pre-meeting brief: "What's the bull and bear case for BTC at $65K?"
-- Client memo: "Generate a one-page market outlook."
-
-**Value:** First-draft memos in 10 seconds instead of 45 minutes. Consistent structure enables comparison across time periods.
+**Value:** First-draft memo in 10 seconds. Cross-signal analysis provides the "why" behind price action.
 
 ---
 
-### Persona 3 — The Crypto-Finance Content Creator
+### Persona 3 — Crypto Content Creator
+**Who:** Newsletter, Substack, YouTube, podcast.
 
-**Who:** Runs a newsletter, Substack, YouTube channel, or podcast about crypto markets. Needs to produce high-quality analysis consistently.
+**Workflow:** Scanner provides the daily anomaly hook ("BTC diverging from macro — here's what it means"). Deep dive gives structured analysis to build content around.
 
-**Pain point:** Content production bottleneck. Research takes 3x longer than writing.
-
-**Use case:**
-- Thread drafting: "Give me 5 narratives explaining today's BTC move."
-- Newsletter research: "Deep-dive into ETF flow dynamics."
-- Script outline: "What's the macro backdrop for crypto this week?"
-
-**Value:** Research assistant that pre-frames the analysis. Content creator adds voice, opinion, and distribution.
+**Value:** Research assistant that pre-frames the analysis. Creator adds voice and distribution.
 
 ---
 
-### Persona 4 — The TradFi Professional Learning Crypto
+### Persona 4 — TradFi Professional Learning Crypto
+**Who:** Equities/FX/fixed-income pro allocating to crypto.
 
-**Who:** Equities, FX, or fixed-income professional allocating to crypto for the first time. Understands macro but doesn't know crypto-native narratives.
+**Workflow:** Uses scanner to understand crypto through familiar macro lenses (DXY, yields, gold). Attribution model translates macro moves into expected crypto impact.
 
-**Pain point:** Crypto markets move on different drivers than traditional assets. Need translation.
-
-**Use case:**
-- "Explain why crypto is correlated with NASDAQ today."
-- "What is a short squeeze in crypto context?"
-- "How does ETF flow impact BTC differently than equity ETF flows?"
-
-**Value:** Bridges TradFi mental models to crypto-native concepts through structured analysis.
-
----
-
-## Usage Examples
-
-### Example 1 — Simple Market Question
-
-**Input:**
-> Why is Bitcoin rising today?
-
-**Output (excerpt):**
-
-> **Executive Summary**
-> Bitcoin is rising today due to strong ETF inflows (+$200M), a weakening DXY (-0.8%), and shifting Fed rate cut expectations. Multiple converging signals suggest institutional accumulation rather than speculative leverage.
-
-> **Key Narratives**
->
-> #1 — ETF Flows — 82% confidence
-> Reasoning: Spot BTC ETFs saw net inflows of $200M, continuing a 5-day streak.
-> Evidence:
-> * ↗ BTC ETF Net Flow: +$200M
-> * ↗ IBIT Volume: $1.2B
-> * → Coinbase Premium: +0.3%
->
-> #2 — USD Weakness — 68% confidence
-> Reasoning: DXY declined 0.8% as Euro strengthened on ECB guidance.
-> Evidence:
-> * ↘ DXY: -0.8%
-> * ↗ EUR/USD: +0.6%
->
-> #3 — Rate Cut Expectations — 61% confidence
-> Reasoning: CME FedWatch now shows 70% probability of September cut.
-> Evidence:
-> * → FedWatch Sept Cut: 70%
-> * ↘ US10Y: -12bps
-
-> **Risk Factors**
-> * CPI print tomorrow could reverse rate cut expectations
-> * BTC has failed to break $60K resistance three times
-> * Elevated perpetual funding rates increase liquidation risk
-
-> **Overall Confidence: 75%** — Multiple converging signals support this analysis.
-
----
-
-### Example 2 — Macro Cross-Asset Question
-
-**Input:**
-> What's driving gold to all-time highs?
-
-**Output structure:** Same memo format — narratives (USD weakness, geopolitical risk, central bank buying), evidence per narrative, risks (rate reversal, dollar strength), confidence score.
-
----
-
-### Example 3 — Scenario Analysis
-
-**Input:**
-> How would a 50bps Fed cut impact crypto markets?
-
-**Output structure:** Narratives (risk-on surge, USD crash, liquidity boost), evidence from historical episodes, risks (recession signal, "sell the fact"), confidence adjusted for scenario uncertainty.
-
----
-
-### Example 4 — Risk-Focused Question
-
-**Input:**
-> What could go wrong for crypto in Q3 2026?
-
-**Output structure:** Narratives flipped to risk framing, evidence of building vulnerabilities, systematic risk factors, overall confidence in bearish thesis.
-
----
-
-## How to Use (Step by Step)
-
-### 1. Sign Up
-1. Go to `danni-terminal.vercel.app`
-2. Click **Start Research** or navigate to `/register`
-3. Enter your email and password (min 8 characters)
-4. Confirm your password
-5. Click **Create Account**
-6. Check your email for the confirmation link
-7. Click the link — you'll be redirected to the research page
-
-### 2. Ask a Question
-1. Type any market question in the input field at the bottom
-2. Press **Enter** (or click the send button)
-3. Wait ~5–15 seconds for the analysis
-
-### 3. Read the Memo
-The memo has five sections:
-- **Executive Summary** — 3–4 sentence takeaway
-- **Key Narratives** — Ranked by confidence, each with:
-  - Confidence percentage
-  - Reasoning (1 sentence)
-  - Evidence grid (indicators with bull/bear/neutral signals)
-- **Supporting Evidence** — Data points backing the analysis
-- **Risk Factors** — What could invalidate this thesis
-- **Overall Confidence** — Holistic conviction score with interpretation
-
-### 4. Iterate
-Ask follow-up questions, drill into specific narratives, or request scenario analysis.
+**Value:** Bridges TradFi mental models to crypto. "DXY ↓ should mean BTC ↑ — but it's not. That's the story."
 
 ---
 
 ## Tips for Best Results
 
-1. **Be specific.** "Why is BTC up 8% today?" is better than "tell me about crypto."
+1. **Check the scanner daily.** The value is in what changed — new divergences, resolved divergences, shifting severity scores.
 
-2. **Ask about narratives, not prices.** "What narratives are driving SOL outperformance?" yields better analysis than "Will SOL hit $200?"
+2. **Use research chat for depth.** Scanner finds the anomaly. Chat explains it in detail.
 
-3. **Use the vocabulary.** The system recognizes: ETF flows, rate expectations, dollar strength, risk sentiment, regulatory developments, technical levels.
+3. **Ask about divergences.** "Why is DXY declining but BTC not responding?" gets better analysis than "What's happening with BTC?"
 
-4. **Drill down.** After the first answer, ask: "Tell me more about narrative #2" or "What's the strongest piece of evidence here?"
+4. **Challenge the analysis.** "What would resolve this divergence?" or "Has this pattern happened before?"
 
-5. **Challenge the analysis.** Ask: "What might invalidate this thesis?" or "What's the counter-argument?"
+5. **Watch the unexplained ratio.** When >1.0, macro isn't driving the bus — something else is.
 
 ---
 
-## Confidence Score Interpretation
+## Data Sources (V2)
 
-| Score | Meaning | Action |
-|-------|---------|--------|
-| 70–100 | Multiple converging signals, high-quality evidence | High conviction thesis |
-| 40–69 | Mixed signals, some evidence gaps | Monitor, await confirmation |
-| 0–39 | High uncertainty, limited data | Low conviction — position size accordingly |
-
-**Important:** Confidence reflects the _system's assessment_ of how well the evidence supports the narrative. It is NOT a trading signal or a prediction. A high-confidence narrative can still be wrong.
+| Source | Signals | Key Required |
+|--------|---------|-------------|
+| CoinGecko | BTC price, ETH price, Gold (XAUT) | Free, no key |
+| FRED | DXY, US10Y, US2Y, Fed Funds | Free key (fred.stlouisfed.org) |
+| Farside | BTC ETF daily net flow | Free, no key |
+| NewsAPI | Market headlines | Free tier (100/day) |
 
 ---
 
 ## Privacy & Data
 
-- All research queries are private to your account
-- Messages are stored in Supabase with Row-Level Security (you can only see your own)
-- No data is shared, sold, or used to train models
-- Market data is fetched in real-time from CoinGecko (free, anonymous)
+- All queries and scanner results private to your account
+- Divergence history stored with Row-Level Security (you only see your own)
+- No data shared, sold, or used for training
+- Market data fetched in real-time, not stored long-term
+
+---
+
+## Technology Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | Next.js 15 (App Router), TypeScript |
+| Styling | Tailwind CSS 4, oklch, Inter + JetBrains Mono |
+| UI | shadcn/ui (New York), lucide-react |
+| Auth | Supabase Auth (email/password, JWT, RLS) |
+| Database | Supabase PostgreSQL (dannifinance schema) |
+| AI | DeepSeek (`deepseek-chat`, JSON mode) |
+| Deployment | Vercel |
 
 ---
 
 ## Support
 
-Danni Research Terminal is in active development (V1, June 2026).
+Danni Market Intelligence Terminal — V2.0 (June 2026).
 
-For issues, feature requests, or questions:
 - GitHub: `github.com/gloria238/danni-market-intelligence-v1`
-- Email the developer directly
 
 ---
 
-*Last updated: 2026-06-01*
+*Last updated: 2026-06-01 — V2.0*

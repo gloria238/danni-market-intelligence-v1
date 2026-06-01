@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-background: #0a0a0b;
+  --color-foreground: #fafafa;
+  --color-card: #131316;
+  --color-card-hover: #1a1a1f;
+  --color-border: #1e1e24;
+  --color-muted: #6b6b75;
+  --color-accent: #3b82f6;
+  --color-accent-foreground: #eff6ff;
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Glass card utility */
+.glass-card {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+}
+
+.glass-card:hover {
+  background: var(--color-card-hover);
+}

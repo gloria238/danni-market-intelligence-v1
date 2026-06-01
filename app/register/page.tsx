@@ -27,7 +27,7 @@ function CreateAccountForm() {
   const [success, setSuccess] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect") ?? "/research";
+  const redirect = searchParams.get("redirect") ?? "/divergences";
 
   const passwordMinLength = 8;
   const passwordValid = password.length >= passwordMinLength;

@@ -16,7 +16,7 @@ function SignInForm() {
   const [error, setError] = useState("");
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect") ?? "/research";
+  const redirect = searchParams.get("redirect") ?? "/divergences";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

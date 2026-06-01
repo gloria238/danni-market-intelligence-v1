@@ -31,18 +31,53 @@ CREATE INDEX IF NOT EXISTS idx_research_messages_session
 ALTER TABLE dannifinance.research_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE dannifinance.research_messages ENABLE ROW LEVEL SECURITY;
 
--- RLS policies: users can only access their own research
-CREATE POLICY "Users own sessions"
-  ON dannifinance.research_sessions
-  FOR ALL
-  USING (auth.uid() = user_id);
+-- RLS policies (idempotent: skip if already exists)
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users own sessions' AND tablename = 'research_sessions' AND schemaname = 'dannifinance') THEN
+    CREATE POLICY "Users own sessions" ON dannifinance.research_sessions FOR ALL USING (auth.uid() = user_id);
+  END IF;
+END $$;
 
-CREATE POLICY "Users own messages"
-  ON dannifinance.research_messages
-  FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1 FROM dannifinance.research_sessions s
-      WHERE s.id = session_id AND s.user_id = auth.uid()
-    )
-  );
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users own messages' AND tablename = 'research_messages' AND schemaname = 'dannifinance') THEN
+    CREATE POLICY "Users own messages" ON dannifinance.research_messages FOR ALL USING (
+      EXISTS (SELECT 1 FROM dannifinance.research_sessions s WHERE s.id = session_id AND s.user_id = auth.uid())
+    );
+  END IF;
+END $$;
+
+-- V1.7: Divergence observations — persistent history
+CREATE TABLE IF NOT EXISTS dannifinance.divergence_observations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  signal_pair_id TEXT NOT NULL,
+  observed_date DATE NOT NULL,
+  severity_score NUMERIC(4,2) NOT NULL,
+  divergence_type TEXT NOT NULL CHECK (divergence_type IN ('confirmed', 'divergence')),
+  signal_a_id TEXT NOT NULL,
+  signal_a_value NUMERIC,
+  signal_a_delta NUMERIC,
+  signal_b_id TEXT NOT NULL,
+  signal_b_value NUMERIC,
+  signal_b_delta NUMERIC,
+  resolution_date DATE,
+  resolution_direction TEXT CHECK (resolution_direction IN ('realigned_bullish', 'realigned_bearish', 'persisted', 'reversed', 'faded')),
+  resolution_note TEXT,
+  unexplained_move_score NUMERIC(5,2),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_div_observations_date
+  ON dannifinance.divergence_observations(observed_date DESC);
+CREATE INDEX IF NOT EXISTS idx_div_observations_pair
+  ON dannifinance.divergence_observations(signal_pair_id);
+CREATE INDEX IF NOT EXISTS idx_div_observations_user
+  ON dannifinance.divergence_observations(user_id, observed_date DESC);
+
+ALTER TABLE dannifinance.divergence_observations ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users own divergence data' AND tablename = 'divergence_observations' AND schemaname = 'dannifinance') THEN
+    CREATE POLICY "Users own divergence data" ON dannifinance.divergence_observations FOR ALL USING (auth.uid() = user_id);
+  END IF;
+END $$;

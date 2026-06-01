@@ -4,23 +4,11 @@ import type { ResearchOutput } from "@/lib/ai";
 import type { SignalDirection } from "@/lib/signals";
 import { cn } from "@/lib/utils";
 import {
-  TrendingUp,
-  TrendingDown,
-  Minus,
-  Database,
-  Activity,
-  Target,
-  ShieldAlert,
-  Lightbulb,
-  Layers,
-  AlertTriangle,
-  Wifi,
-  WifiOff,
-  CheckCircle2,
-  XCircle,
-  ArrowRight,
-  GitCompare,
+  TrendingUp, TrendingDown, Minus, Database, Activity, Target,
+  ShieldAlert, Lightbulb, Layers, AlertTriangle, Wifi, WifiOff,
+  CheckCircle2, XCircle, ArrowRight, GitCompare, BarChart3,
 } from "lucide-react";
+import { severityLabel, severityColor } from "@/lib/ranking";
 
 /* ——— Sub-components ——— */
 
@@ -139,145 +127,89 @@ export function MemoRenderer({ data }: { data: ResearchOutput }) {
         <p className="text-[15px] font-medium leading-relaxed text-foreground">{data.summary}</p>
       </div>
 
-      {/* === V1.5: Cross-Signal Analysis === */}
+      {/* === V1.6: Move Attribution === */}
+      {data.attribution && data.attribution.btcActualMove !== 0 && data.attribution.availableFactors > 0 && (
+        <section>
+          <SectionHeader icon={BarChart3} label="Move Attribution" />
+          <div className="rounded-xl border border-border bg-surface-elevated p-5 space-y-4">
+            <p className="text-xs text-foreground-secondary leading-relaxed">{data.attributionText}</p>
+            {/* Factor contributions bar */}
+            <div className="space-y-2">
+              {data.attribution.factors.filter(f => f.isAvailable).map((f) => {
+                const pct = data.attribution.btcActualMove !== 0
+                  ? Math.min(Math.abs(f.expectedBtcContribution / data.attribution.btcActualMove) * 100, 100)
+                  : 0;
+                return (
+                  <div key={f.signalId} className="flex items-center gap-3 text-xs">
+                    <span className="w-20 text-foreground-secondary truncate">{f.signalLabel}</span>
+                    <div className="flex-1 h-1.5 rounded-full bg-border overflow-hidden">
+                      <div
+                        className={cn("h-full rounded-full", f.expectedBtcContribution >= 0 ? "bg-success" : "bg-danger")}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <span className={cn("font-mono tabular-nums w-14 text-right", f.expectedBtcContribution >= 0 ? "text-success" : "text-danger")}>
+                      {f.expectedBtcContribution >= 0 ? "+" : ""}{f.expectedBtcContribution.toFixed(1)}%
+                    </span>
+                  </div>
+                );
+              })}
+              {/* Unexplained */}
+              <div className="flex items-center gap-3 text-xs pt-1 border-t border-border">
+                <span className="w-20 text-foreground-secondary truncate font-semibold">Unexplained</span>
+                <div className="flex-1 h-1.5 rounded-full bg-border overflow-hidden">
+                  <div
+                    className={cn("h-full rounded-full", data.attribution.unexplainedRatio > 1 ? "bg-danger" : "bg-warning")}
+                    style={{ width: `${Math.min(data.attribution.btcActualMove !== 0 ? Math.abs(data.attribution.unexplained / data.attribution.btcActualMove) * 100 : 0, 100)}%` }}
+                  />
+                </div>
+                <span className={cn("font-mono tabular-nums w-14 text-right font-semibold", data.attribution.unexplained >= 0 ? "text-success" : "text-danger")}>
+                  {data.attribution.unexplained >= 0 ? "+" : ""}{data.attribution.unexplained.toFixed(1)}%
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* === Cross-Signal Analysis + Severity Scores === */}
       {data.cross_signals && data.cross_signals.totalTestable > 0 && (
         <section>
           <SectionHeader icon={GitCompare} label="Cross-Signal Analysis" />
-          <div
-            className={cn(
-              "rounded-xl border p-5 space-y-4",
-              data.cross_signals.overall === "divergent"
-                ? "border-warning/30 bg-warning-subtle/20"
-                : data.cross_signals.overall === "mixed"
-                  ? "border-warning/15 bg-surface-elevated"
-                  : "border-success/15 bg-success-subtle/10"
-            )}
-          >
-            {/* Summary */}
+          <div className={cn("rounded-xl border p-5 space-y-4", data.cross_signals.overall === "divergent" ? "border-warning/30 bg-warning-subtle/20" : data.cross_signals.overall === "mixed" ? "border-warning/15 bg-surface-elevated" : "border-success/15 bg-success-subtle/10")}>
             <div className="flex items-start gap-2.5">
-              <span
-                className={cn(
-                  "mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider border",
-                  data.cross_signals.overall === "supportive"
-                    ? "text-success bg-success-subtle border-success/20"
-                    : data.cross_signals.overall === "divergent"
-                      ? "text-warning bg-warning-subtle border-warning/20"
-                      : data.cross_signals.overall === "mixed"
-                        ? "text-warning bg-warning-subtle/50 border-warning/15"
-                        : "text-muted bg-surface border-border"
-                )}
-              >
-                {data.cross_signals.overall.toUpperCase()}
-              </span>
-              <p className="text-xs text-foreground-secondary leading-relaxed">
-                {data.cross_signals.summary}
-              </p>
+              <span className={cn("mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider border", data.cross_signals.overall === "supportive" ? "text-success bg-success-subtle border-success/20" : data.cross_signals.overall === "divergent" ? "text-warning bg-warning-subtle border-warning/20" : data.cross_signals.overall === "mixed" ? "text-warning bg-warning-subtle/50 border-warning/15" : "text-muted bg-surface border-border")}>{data.cross_signals.overall.toUpperCase()}</span>
+              <p className="text-xs text-foreground-secondary leading-relaxed">{data.cross_signals.summary}</p>
             </div>
-
-            {/* Confirmed relationships (compact) */}
             {data.cross_signals.confirmedPatterns.length > 0 && (
               <div className="space-y-1">
                 {data.cross_signals.confirmedPatterns.map((c) => {
-                  const aArrow =
-                    c.signalA.direction === "rising"
-                      ? "↑"
-                      : c.signalA.direction === "falling"
-                        ? "↓"
-                        : "→";
-                  const bArrow =
-                    c.signalB.direction === "rising"
-                      ? "↑"
-                      : c.signalB.direction === "falling"
-                        ? "↓"
-                        : "→";
-                  return (
-                    <div
-                      key={c.id}
-                      className="flex items-center gap-2 text-xs rounded-lg px-3 py-1.5 bg-surface/50"
-                    >
-                      <CheckCircle2 className="h-3 w-3 text-success shrink-0" />
-                      <span className="text-foreground-secondary">
-                        {c.signalA.label}{" "}
-                        <span className="font-mono text-foreground">
-                          {aArrow}
-                        </span>{" "}
-                        + {c.signalB.label}{" "}
-                        <span className="font-mono text-foreground">
-                          {bArrow}
-                        </span>
-                      </span>
-                      <span className="text-muted">— as expected</span>
-                    </div>
-                  );
+                  const aA = c.signalA.direction === "rising" ? "↑" : c.signalA.direction === "falling" ? "↓" : "→";
+                  const bA = c.signalB.direction === "rising" ? "↑" : c.signalB.direction === "falling" ? "↓" : "→";
+                  return (<div key={c.id} className="flex items-center gap-2 text-xs rounded-lg px-3 py-1.5 bg-surface/50"><CheckCircle2 className="h-3 w-3 text-success shrink-0"/><span className="text-foreground-secondary">{c.signalA.label} <span className="font-mono text-foreground">{aA}</span> + {c.signalB.label} <span className="font-mono text-foreground">{bA}</span></span><span className="text-muted">— as expected</span></div>);
                 })}
               </div>
             )}
-
-            {/* Divergences */}
-            {data.cross_signals.divergences.length > 0 && (
+            {data.cross_signals.rankedDivergences && data.cross_signals.rankedDivergences.length > 0 && (
               <div className="space-y-2">
-                {data.cross_signals.divergences.map((d) => {
-                  const sevLabel =
-                    d.severity === "notable"
-                      ? "Notable"
-                      : d.severity === "moderate"
-                        ? "Moderate"
-                        : "Minor";
-                  const sevColor =
-                    d.severity === "notable"
-                      ? "text-warning border-warning/20 bg-warning-subtle/30"
-                      : d.severity === "moderate"
-                        ? "text-warning/80 border-warning/15 bg-warning-subtle/20"
-                        : "text-muted border-border bg-surface/50";
-                  const aArrow =
-                    d.signalA.direction === "rising"
-                      ? "↑"
-                      : d.signalA.direction === "falling"
-                        ? "↓"
-                        : "→";
-                  const bArrow =
-                    d.signalB.direction === "rising"
-                      ? "↑"
-                      : d.signalB.direction === "falling"
-                        ? "↓"
-                        : "→";
-                  return (
-                    <div
-                      key={d.id}
-                      className={cn(
-                        "rounded-lg border px-4 py-3 space-y-1.5",
-                        sevColor
-                      )}
-                    >
+                {data.cross_signals.rankedDivergences.map((d) => {
+                  const score = d.severityScore;
+                  const label = severityLabel(score);
+                  const aA = d.signalA.direction === "rising" ? "↑" : d.signalA.direction === "falling" ? "↓" : "→";
+                  const bA = d.signalB.direction === "rising" ? "↑" : d.signalB.direction === "falling" ? "↓" : "→";
+                  return (<div key={d.id} className={cn("rounded-lg border px-4 py-3 space-y-1.5", severityColor(score))}>
+                    <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <AlertTriangle className="h-3 w-3 text-warning shrink-0" />
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted">
-                          {sevLabel} Divergence
-                        </span>
+                        <AlertTriangle className="h-3 w-3 text-warning shrink-0"/>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted">{label}</span>
                       </div>
-                      <p className="text-xs text-foreground-secondary leading-relaxed">
-                        <span className="font-mono text-foreground">
-                          {d.signalA.label} {aArrow} ({d.signalA.value})
-                        </span>
-                        {" normally → "}
-                        <span className="font-mono text-foreground">
-                          {d.signalB.label}{" "}
-                          {d.expectation.correlation === "inverse"
-                            ? aArrow === "↑"
-                              ? "↓"
-                              : "↑"
-                            : aArrow}
-                        </span>
-                        , but{" "}
-                        <span className="font-mono text-foreground">
-                          {d.signalB.label} {bArrow} ({d.signalB.value})
-                        </span>
-                      </p>
-                      <p className="text-xs text-muted italic leading-relaxed">
-                        {d.interpretation}
-                      </p>
+                      <span className="text-xs font-mono font-bold tabular-nums">{score.toFixed(1)}<span className="text-muted">/10</span></span>
                     </div>
-                  );
+                    <p className="text-xs text-foreground-secondary leading-relaxed">
+                      <span className="font-mono text-foreground">{d.signalA.label} {aA}</span>{" normally → "}<span className="font-mono text-foreground">{d.signalB.label} {d.expectation.correlation === "inverse" ? (aA === "↑" ? "↓" : "↑") : aA}</span>, but <span className="font-mono text-foreground">{d.signalB.label} {bA}</span>
+                    </p>
+                    <p className="text-xs text-muted italic leading-relaxed">{d.interpretation}</p>
+                  </div>);
                 })}
               </div>
             )}

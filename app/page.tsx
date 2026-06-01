@@ -50,12 +50,12 @@ export default function LandingPage() {
 
         {/* CTA */}
         <div className="pt-2">
-          <Link href="/research">
+          <Link href="/divergences">
             <Button
               size="lg"
               className="gap-2.5 px-8 h-12 text-sm font-semibold tracking-wide rounded-xl bg-accent hover:bg-accent-hover text-white shadow-lg shadow-accent/25 transition-all hover:shadow-xl hover:shadow-accent/30 hover:scale-[1.02] active:scale-[0.98]"
             >
-              Start Research
+              Open Scanner
               <ArrowRight className="h-4 w-4" />
             </Button>
           </Link>
@@ -63,7 +63,7 @@ export default function LandingPage() {
 
         {/* Footer note */}
         <p className="text-xs text-muted">
-          Powered by real-time market data + structured AI reasoning
+          Cross-signal divergence detection · Narrative-driven analysis · AI reasoning
         </p>
       </div>
     </div>

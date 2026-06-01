@@ -28,7 +28,7 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   // Protected routes
-  const protectedPaths = ["/research"];
+  const protectedPaths = ["/research", "/divergences"];
   const isProtected = protectedPaths.some((p) =>
     request.nextUrl.pathname.startsWith(p)
   );
@@ -40,9 +40,9 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Redirect authenticated users away from auth pages
+  // Redirect authenticated users away from auth pages → scanner is the new home
   if ((request.nextUrl.pathname === "/login" || request.nextUrl.pathname === "/register") && user) {
-    return NextResponse.redirect(new URL("/research", request.url));
+    return NextResponse.redirect(new URL("/divergences", request.url));
   }
 
   return supabaseResponse;

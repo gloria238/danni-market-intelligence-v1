@@ -59,6 +59,8 @@ function nullSignal(id: string): SignalValue {
     available: false,
     direction: null,
     directionContext: null,
+    delta: null,
+    previousValue: null,
   };
 }
 
@@ -67,7 +69,9 @@ function valueSignal(
   rawValue: number,
   format: string,
   direction: SignalDirection | null = null,
-  directionContext: string | null = null
+  directionContext: string | null = null,
+  delta: number | null = null,
+  previousValue: number | null = null
 ): SignalValue {
   const def = SIGNAL_REGISTRY[id];
   return {
@@ -78,6 +82,8 @@ function valueSignal(
     available: true,
     direction,
     directionContext,
+    delta,
+    previousValue,
   };
 }
 
@@ -99,7 +105,7 @@ async function fetchCoinGecko(): Promise<Record<string, SignalValue>> {
 
   const data = await res.json();
 
-  // BTC Price — direction from 24h change sign
+  // BTC Price — direction + delta from 24h change
   const btcUsd = data?.bitcoin?.usd;
   if (btcUsd != null) {
     const change24h = data?.bitcoin?.usd_24h_change;
@@ -109,17 +115,19 @@ async function fetchCoinGecko(): Promise<Record<string, SignalValue>> {
     const ctx: string | null = change24h != null
       ? `24h: ${change24h >= 0 ? "+" : ""}${change24h.toFixed(2)}%`
       : null;
-    signals.BTC_PRICE = valueSignal("BTC_PRICE", btcUsd, `$${btcUsd.toLocaleString()}`, dir, ctx);
+    const d = change24h != null ? (btcUsd * change24h) / 100 : null;
+    const pv = change24h != null ? btcUsd / (1 + change24h / 100) : null;
+    signals.BTC_PRICE = valueSignal("BTC_PRICE", btcUsd, `$${btcUsd.toLocaleString()}`, dir, ctx, d, pv);
   }
 
-  // BTC 24h Change — direction IS the signal
+  // BTC 24h Change
   if (data?.bitcoin?.usd_24h_change != null) {
     const v = data.bitcoin.usd_24h_change;
     const dir: SignalDirection = v > 0.5 ? "rising" : v < -0.5 ? "falling" : "stable";
     signals.BTC_24H_CHANGE = valueSignal(
       "BTC_24H_CHANGE", v, `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`,
-      dir,
-      dir === "rising" ? "Price increasing over 24h" : dir === "falling" ? "Price decreasing over 24h" : "Flat over 24h"
+      dir, dir === "rising" ? "Price increasing" : dir === "falling" ? "Price decreasing" : "Flat over 24h",
+      v, null
     );
   }
 
@@ -138,7 +146,9 @@ async function fetchCoinGecko(): Promise<Record<string, SignalValue>> {
     const ctx: string | null = change24h != null
       ? `24h: ${change24h >= 0 ? "+" : ""}${change24h.toFixed(2)}%`
       : null;
-    signals.GOLD_PRICE = valueSignal("GOLD_PRICE", goldUsd, `$${goldUsd.toLocaleString()}`, dir, ctx);
+    const d = change24h != null ? (goldUsd * change24h) / 100 : null;
+    const pv = change24h != null ? goldUsd / (1 + change24h / 100) : null;
+    signals.GOLD_PRICE = valueSignal("GOLD_PRICE", goldUsd, `$${goldUsd.toLocaleString()}`, dir, ctx, d, pv);
   }
 
   return signals;
@@ -197,8 +207,9 @@ async function fetchFred(): Promise<Record<string, SignalValue>> {
       const isYieldOrRate = id.includes("YIELD") || id.includes("RATE");
       const format = isYieldOrRate ? `${pair.latest.toFixed(2)}%` : pair.latest.toFixed(2);
       const { direction, context } = deriveDirection(pair.latest, pair.previous);
-
-      signals[id] = valueSignal(id, pair.latest, format, direction, context);
+      const delta = pair.latest - pair.previous;
+      const prev = pair.latest !== pair.previous ? pair.previous : null;
+      signals[id] = valueSignal(id, pair.latest, format, direction, context, delta, prev);
     }
   }
 
@@ -226,20 +237,19 @@ async function fetchFarside(): Promise<Record<string, SignalValue>> {
 
     if (today?.total != null) {
       const flow = today.total;
-      const prevFlow = yesterday?.total ?? 0;
+      const prevFlow = yesterday?.total ?? null;
       const dir: SignalDirection =
         flow > 50 ? "rising" : flow < -50 ? "falling" : "stable";
+      const delta = prevFlow != null ? flow - prevFlow : null;
       const directionContext =
-        prevFlow !== 0
+        prevFlow != null
           ? `${flow > prevFlow ? "↑" : flow < prevFlow ? "↓" : "→"} prior day: ${prevFlow >= 0 ? "+" : ""}$${prevFlow.toFixed(0)}M`
           : "Prior day data unavailable";
 
-      // Weekly
       const last7 = data.slice(-7);
       const weekFlow = last7.reduce((sum: number, d: FarsideFlow) => sum + (d.total ?? 0), 0);
-
       const fmt = `${flow >= 0 ? "+" : ""}$${flow.toFixed(0)}M (5d: ${weekFlow >= 0 ? "+" : ""}$${weekFlow.toFixed(0)}M)`;
-      signals.BTC_ETF_FLOW = valueSignal("BTC_ETF_FLOW", flow, fmt, dir, directionContext);
+      signals.BTC_ETF_FLOW = valueSignal("BTC_ETF_FLOW", flow, fmt, dir, directionContext, delta, prevFlow);
     }
   } catch {
     // silent

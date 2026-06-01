@@ -1,6 +1,7 @@
 "use client";
 
-import type { ResearchOutput, ConfidenceLevel } from "@/lib/ai";
+import type { ResearchOutput } from "@/lib/ai";
+import type { CoverageLevel } from "@/lib/signals";
 import { cn } from "@/lib/utils";
 import {
   TrendingUp,
@@ -13,46 +14,53 @@ import {
   Lightbulb,
   Layers,
   AlertTriangle,
-  Info,
+  Signal,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
 
 /* ——— Sub-components ——— */
 
-const CONFIDENCE_META: Record<
-  ConfidenceLevel,
-  { label: string; color: string; bg: string; border: string }
+const COVERAGE_META: Record<
+  CoverageLevel,
+  { label: string; color: string; bg: string; border: string; icon: React.ElementType }
 > = {
-  High: {
-    label: "High",
+  "Strongly Supported": {
+    label: "Strong",
     color: "text-success",
     bg: "bg-success-subtle",
     border: "border-success/20",
+    icon: Wifi,
   },
-  Medium: {
-    label: "Medium",
+  "Partially Supported": {
+    label: "Partial",
     color: "text-warning",
     bg: "bg-warning-subtle",
     border: "border-warning/20",
+    icon: Signal,
   },
-  Low: {
-    label: "Low",
+  "Insufficient Data": {
+    label: "No Data",
     color: "text-danger",
     bg: "bg-danger-subtle",
     border: "border-danger/20",
+    icon: WifiOff,
   },
 };
 
-function ConfidenceBadge({ level }: { level: ConfidenceLevel }) {
-  const meta = CONFIDENCE_META[level];
+function CoverageBadge({ level }: { level: CoverageLevel }) {
+  const meta = COVERAGE_META[level];
+  const Icon = meta.icon;
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider border",
+        "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider border",
         meta.color,
         meta.bg,
         meta.border
       )}
     >
+      <Icon className="h-3 w-3" />
       {meta.label}
     </span>
   );
@@ -66,6 +74,22 @@ function SignalIcon({ signal }: { signal: "bullish" | "bearish" | "neutral" }) {
     return <TrendingDown className="h-3.5 w-3.5 text-danger shrink-0" />;
   }
   return <Minus className="h-3.5 w-3.5 text-muted shrink-0" />;
+}
+
+function LiveTag({ isLive }: { isLive: boolean }) {
+  if (isLive) {
+    return (
+      <span className="inline-flex items-center gap-0.5 text-[9px] text-success bg-success-subtle rounded px-1 py-0 font-mono font-semibold uppercase border border-success/20">
+        <Wifi className="h-2.5 w-2.5" />
+        Live
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-0.5 text-[9px] text-muted bg-surface rounded px-1 py-0 font-mono uppercase border border-border">
+      Est
+    </span>
+  );
 }
 
 function SectionHeader({
@@ -90,19 +114,23 @@ function SectionHeader({
 export function MemoRenderer({ data }: { data: ResearchOutput }) {
   if (!data) return null;
 
-  const overallMeta = CONFIDENCE_META[data.confidence];
+  const coveragePct = data.signal_coverage.total > 0
+    ? Math.round((data.signal_coverage.available / data.signal_coverage.total) * 100)
+    : 0;
 
   return (
     <div className="glass-card p-6 space-y-7 animate-in">
       {/* === Executive Summary === */}
       <div>
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <div className="flex items-center gap-2.5">
             <Target className="h-4 w-4 text-accent" />
             <h3 className="text-xs font-bold uppercase tracking-widest text-muted">
               Research Memo
             </h3>
           </div>
+
+          {/* Status badges */}
           <div className="flex items-center gap-2">
             {data.premise_corrected && (
               <span className="inline-flex items-center gap-1 text-[11px] text-warning bg-warning-subtle rounded-full px-2.5 py-0.5 font-medium border border-warning/20">
@@ -117,12 +145,33 @@ export function MemoRenderer({ data }: { data: ResearchOutput }) {
               </span>
             ) : (
               <span className="inline-flex items-center gap-1.5 text-[11px] text-warning bg-warning-subtle rounded-full px-2.5 py-0.5 font-medium border border-warning/20">
-                <Info className="h-3 w-3" />
+                <WifiOff className="h-3 w-3" />
                 No live data
               </span>
             )}
           </div>
         </div>
+
+        {/* Signal coverage bar */}
+        <div className="flex items-center gap-3 mb-4">
+          <div className="flex-1 h-1.5 rounded-full bg-border overflow-hidden">
+            <div
+              className={cn(
+                "h-full rounded-full transition-all duration-1000 ease-out",
+                coveragePct >= 70
+                  ? "bg-success"
+                  : coveragePct >= 40
+                    ? "bg-warning"
+                    : "bg-danger"
+              )}
+              style={{ width: `${coveragePct}%` }}
+            />
+          </div>
+          <span className="text-[11px] font-mono text-muted tabular-nums whitespace-nowrap">
+            {data.signal_coverage.available}/{data.signal_coverage.total} signals
+          </span>
+        </div>
+
         <p className="text-[15px] font-medium leading-relaxed text-foreground">
           {data.summary}
         </p>
@@ -139,22 +188,24 @@ export function MemoRenderer({ data }: { data: ResearchOutput }) {
                 key={n.id}
                 className={cn(
                   "group rounded-xl border p-5 space-y-4 transition-all",
-                  n.confidence === "Low"
-                    ? "border-warning/20 bg-surface-elevated opacity-75"
-                    : "border-border bg-surface-elevated hover:border-border-light hover:bg-surface-hover"
+                  n.coverage === "Insufficient Data"
+                    ? "border-danger/15 bg-surface-elevated opacity-60"
+                    : n.coverage === "Partially Supported"
+                      ? "border-warning/15 bg-surface-elevated"
+                      : "border-border bg-surface-elevated hover:border-border-light hover:bg-surface-hover"
                 )}
               >
                 {/* Header row */}
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-1.5">
+                    <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                       <span className="text-[11px] font-mono text-muted tabular-nums">
                         {String(i + 1).padStart(2, "0")}
                       </span>
                       <h5 className="text-sm font-bold tracking-tight text-foreground">
                         {n.name}
                       </h5>
-                      <ConfidenceBadge level={n.confidence} />
+                      <CoverageBadge level={n.coverage} />
                     </div>
                     <p className="text-xs text-foreground-secondary leading-relaxed">
                       {n.reasoning}
@@ -175,17 +226,25 @@ export function MemoRenderer({ data }: { data: ResearchOutput }) {
                       {n.indicators.map((ind, j) => (
                         <div
                           key={j}
-                          className="flex items-center gap-2.5 rounded-lg bg-background px-3.5 py-2.5 transition-colors group-hover:bg-background-deep"
+                          className={cn(
+                            "flex items-center gap-2.5 rounded-lg px-3.5 py-2.5 transition-colors",
+                            ind.isLive
+                              ? "bg-background group-hover:bg-background-deep"
+                              : "bg-warning-subtle/30 border border-warning/10"
+                          )}
                         >
                           <SignalIcon signal={ind.signal} />
-                          <div className="min-w-0">
-                            <p className="text-[11px] text-muted truncate leading-tight">
-                              {ind.label}
-                            </p>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-[11px] text-muted truncate leading-tight">
+                                {ind.label}
+                              </p>
+                              <LiveTag isLive={ind.isLive} />
+                            </div>
                             <p
                               className={cn(
                                 "text-xs font-mono font-semibold truncate leading-tight mt-0.5",
-                                ind.value === "N/A"
+                                !ind.isLive
                                   ? "text-muted italic"
                                   : ind.signal === "bullish"
                                     ? "text-success"
@@ -208,23 +267,33 @@ export function MemoRenderer({ data }: { data: ResearchOutput }) {
         </section>
       )}
 
-      {/* === Suppressed Narratives === */}
-      {data.suppressed_narratives.length > 0 && (
+      {/* === Coverage Analysis — data-limited narratives === */}
+      {data.insufficient_data_narratives.length > 0 && (
         <section>
-          <SectionHeader icon={AlertTriangle} label="Data-Limited Narratives" />
-          <div className="rounded-lg border border-warning/20 bg-warning-subtle/50 px-4 py-3">
+          <SectionHeader icon={AlertTriangle} label="Coverage Analysis" />
+          <div className="rounded-xl border border-warning/20 bg-warning-subtle/30 p-4 space-y-3">
             <p className="text-xs text-foreground-secondary leading-relaxed">
-              The following narratives were identified but could not be assessed
-              with sufficient confidence due to missing data sources:
+              {data.insufficient_data_narratives.length} narrative
+              {data.insufficient_data_narratives.length > 1 ? "s" : ""} could
+              not be assessed due to missing data. Adding DXY, ETF flow, and
+              Treasury yield data sources would improve coverage significantly.
             </p>
-            <div className="flex flex-wrap gap-1.5 mt-2">
-              {data.suppressed_narratives.map((id) => (
-                <span
-                  key={id}
-                  className="inline-flex items-center rounded-md bg-surface border border-border px-2 py-0.5 text-[10px] font-mono text-muted"
+            <div className="space-y-1.5">
+              {data.insufficient_data_narratives.map((n) => (
+                <div
+                  key={n.id}
+                  className="flex items-start gap-2 text-xs"
                 >
-                  {id}
-                </span>
+                  <span className="mt-0.5 h-1.5 w-1.5 rounded-full bg-warning/50 shrink-0" />
+                  <div>
+                    <span className="font-medium text-foreground-secondary">
+                      {n.name}
+                    </span>
+                    <span className="text-muted ml-2">
+                      missing: {n.missingSignals.join(", ")}
+                    </span>
+                  </div>
+                </div>
               ))}
             </div>
           </div>
@@ -270,24 +339,6 @@ export function MemoRenderer({ data }: { data: ResearchOutput }) {
           </div>
         </section>
       )}
-
-      {/* === Overall Confidence === */}
-      <div className="border-t border-border pt-5">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <Target className="h-3.5 w-3.5 text-accent" />
-            <span className="text-[11px] font-semibold uppercase tracking-widest text-muted">
-              Overall Confidence
-            </span>
-          </div>
-          <ConfidenceBadge level={data.confidence} />
-        </div>
-        <div className={cn("rounded-lg border px-4 py-3", overallMeta.bg, overallMeta.border)}>
-          <p className={cn("text-xs leading-relaxed", overallMeta.color)}>
-            {data.confidence_rationale}
-          </p>
-        </div>
-      </div>
     </div>
   );
 }

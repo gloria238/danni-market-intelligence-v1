@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateResearch } from "@/lib/ai";
 import { detectIntent } from "@/lib/intent";
 import {
-  fetchMarketSnapshot,
+  fetchAllMarketData,
   fetchNewsHeadlines,
   type MarketContext,
 } from "@/lib/market-data";
@@ -22,18 +22,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 1. Detect intent — normalize before the LLM ever sees it
+    // 1. Detect intent
     const intent = detectIntent(question.trim());
 
-    // 2. Fetch market context in parallel
+    // 2. Fetch all market data sources in parallel (CoinGecko + FRED + Farside + News)
     const [snapshot, headlines] = await Promise.all([
-      fetchMarketSnapshot().catch(() => null),
+      fetchAllMarketData().catch(() => null),
       fetchNewsHeadlines().catch(() => []),
     ]);
 
     const marketCtx: MarketContext = { snapshot, headlines };
 
-    // 3. Generate — passes intent to the prompt builder
+    // 3. Generate research with coverage-aware narrative framework
     const result = await generateResearch(question.trim(), marketCtx, intent);
 
     return NextResponse.json(result);

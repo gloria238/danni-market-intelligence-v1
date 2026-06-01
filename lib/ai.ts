@@ -1,11 +1,13 @@
 import OpenAI from "openai";
 import {
-  resolveNarrative,
   NARRATIVE_REGISTRY,
-  getAvailableDataSources,
-  formatActiveNarrativesForPrompt,
+  assessNarrative,
+  buildNarrativeCoverageTable,
+  formatNarrativesForPrompt,
+  type NarrativeAssessment,
 } from "@/lib/narratives";
-import type { MarketContext } from "@/lib/market-data";
+import type { SignalValue, CoverageLevel } from "@/lib/signals";
+import type { MarketContext, MarketSnapshot } from "@/lib/market-data";
 import { formatMarketContextForPrompt } from "@/lib/market-data";
 import type { IntentResult } from "@/lib/intent";
 
@@ -20,122 +22,80 @@ export interface NarrativeIndicator {
   label: string;
   value: string;
   signal: "bullish" | "bearish" | "neutral";
+  /** Whether this indicator came from real data or LLM estimation */
+  isLive: boolean;
 }
 
-export type ConfidenceLevel = "High" | "Medium" | "Low";
-
-export interface ResearchNarrative {
+export type ResearchNarrative = {
   id: string;
   name: string;
-  confidence: ConfidenceLevel;
+  coverage: CoverageLevel;
+  coverageRatio: number;
   indicators: NarrativeIndicator[];
   reasoning: string;
-}
+};
 
 export interface ResearchOutput {
-  /** The user's inferred intent */
   intent: string;
   summary: string;
   narratives: ResearchNarrative[];
   evidence: string[];
   risks: string[];
-  confidence: ConfidenceLevel;
-  /** Description text explaining the overall confidence level */
-  confidence_rationale: string;
+  /** Overall signal coverage */
+  signal_coverage: { available: number; total: number };
   market_context_used: boolean;
-  /** If true, the question's premise contradicts observable data */
   premise_corrected: boolean;
-  /** List of narrative IDs suppressed due to insufficient data */
-  suppressed_narratives: string[];
+  /** Narratives excluded due to insufficient data */
+  insufficient_data_narratives: { id: string; name: string; missingSignals: string[] }[];
 }
 
 // ——— Prompt builder ———
 
-function buildSystemPrompt(marketCtx: MarketContext, intent: IntentResult): string {
-  const marketBlock = formatMarketContextForPrompt(marketCtx);
+function buildSystemPrompt(
+  snapshot: MarketSnapshot,
+  headlines: { title: string; source: string; url?: string; publishedAt?: string }[],
+  intent: IntentResult
+): string {
+  const marketBlock = formatMarketContextForPrompt(snapshot, headlines as any);
+  const narrativeBlock = formatNarrativesForPrompt(snapshot.signals);
 
-  // Determine which data sources are available
-  const hasBtcPrice = marketCtx.snapshot?.btc?.price != null;
-  const hasNews = marketCtx.headlines.length > 0;
-  const availableSources = getAvailableDataSources(hasBtcPrice, hasNews);
-
-  const { block: narrativeBlock, activeIds } =
-    formatActiveNarrativesForPrompt(availableSources);
-
-  return `You are a senior market analyst at a top-tier macro research firm. Your analysis is measured, evidence-grounded, and honest about uncertainty.
+  return `You are a senior market analyst at a top-tier macro research firm. Your analysis is grounded in data — not speculation.
 
 ## USER INTENT
-The user asked: "${intent.normalizedQuestion}"
 Inferred intent: ${intent.intent}
-
+Original question: "${intent.normalizedQuestion}"
 ${intent.factCheckNote || ""}
 
-## YOUR TASK
-Provide a market analysis addressing the user's actual intent. If the literal wording of the question contradicts the real-time data provided above, address this professionally and reframe the answer around what IS happening, without rejecting the user's question.
-
-## AVAILABLE NARRATIVES (MATCH FROM THIS LIST ONLY)
-You MUST select from these pre-defined narratives. Suppressed narratives are listed because we lack the data to support them credibly.
+## NARRATIVE FRAMEWORK
 ${narrativeBlock}
 
-${marketBlock || "## WARNING: No real-time market data available. Use your best judgment but flag this limitation."}
+${marketBlock}
 
-## CONFIDENCE LEVELS
-Use qualitative labels, not percentages:
-- "High" — Multiple converging data points strongly support this narrative
-- "Medium" — Evidence is directionally aligned but not conclusive
-- "Low" — Plausible narrative but data is sparse, dated, or contradictory
-
-## OUTPUT REQUIREMENTS
-Return ONLY valid JSON with this EXACT structure:
+## OUTPUT — Return ONLY valid JSON
 
 {
-  "summary": "3-4 sentence executive summary. Reference specific data. If the market data contradicts the user's premise, address this professionally in the first sentence.",
+  "summary": "3-4 sentence executive summary. Reference specific data values from the Available Data above. If the user's premise is incorrect, address this in the first sentence then provide the analysis they actually need.",
   "narratives": [
     {
       "id": "NARRATIVE_ID_FROM_REGISTRY",
-      "confidence": "High",
-      "reasoning": "1 sentence explaining WHY this confidence level, referencing specific data.",
+      "reasoning": "1 sentence referencing specific available data points",
       "indicators": [
-        { "label": "BTC Price", "value": "$72,906", "signal": "bearish" },
-        { "label": "ETF Flow Estimate", "value": "+$200M", "signal": "bullish" }
+        { "label": "BTC Price", "value": "$72,906", "signal": "bearish", "isLive": true },
+        { "label": "ETF Flow Estimate", "value": "+$200M (per reports)", "signal": "bullish", "isLive": false }
       ]
     }
   ],
-  "evidence": ["Specific data point 1", "Specific data point 2"],
-  "risks": ["What could invalidate this thesis 1", "What could invalidate this thesis 2"],
-  "confidence": "Medium",
-  "confidence_rationale": "1 sentence explaining overall confidence"
+  "evidence": ["Data point 1 from the Available Data", "Data point 2"],
+  "risks": ["What could invalidate this thesis 1", "What could invalidate this thesis 2"]
 }
 
 ## RULES
-1. Narratives MUST come from the AVAILABLE NARRATIVES list above. Match by id.
-2. Each narrative MUST include 2-4 indicators with specific values (even if estimated).
-3. If a narrative's required data is unavailable, its indicators should show "N/A" and signal "neutral". Confidence for such narratives MUST be "Low".
-4. PRIORITIZE real-time market data over your training knowledge.
-5. For a "High" confidence label, you MUST have ≥2 specific data points backing it.
-6. Do NOT make up exact numbers. Use "estimates suggest", "reports indicate" when uncertain.
-7. The overall "confidence" reflects how well-supported the ENTIRE analysis is, not a single narrative.`;
-}
-
-// ——— Confidence normalization ———
-
-function normalizeConfidence(raw: string): ConfidenceLevel {
-  const v = String(raw || "").toLowerCase().trim();
-  if (v.includes("high")) return "High";
-  if (v.includes("medium") || v.includes("moderate")) return "Medium";
-  if (v.includes("low")) return "Low";
-  return "Medium"; // safe default
-}
-
-function confidenceRationale(level: ConfidenceLevel): string {
-  switch (level) {
-    case "High":
-      return "Multiple converging data points support this analysis with strong conviction.";
-    case "Medium":
-      return "Evidence is directionally aligned but incomplete — monitor for confirmation.";
-    case "Low":
-      return "Data is sparse or contradictory — this thesis has limited backing at present.";
-  }
+1. Use narratives from the framework above. Prioritize "STRONGLY SUPPORTED" narratives first.
+2. Never use "INSUFFICIENT DATA" narratives — they have no data backing.
+3. For each indicator: set "isLive": true if the value came from the Available Data above, false if you estimated it.
+4. Signal must be "bullish", "bearish", or "neutral" based on the actual data direction.
+5. evidence items must reference specific data from the Available Data section.
+6. If data is sparse, say so in the summary. Don't invent certainty.`;
 }
 
 // ——— Main ———
@@ -145,10 +105,17 @@ export async function generateResearch(
   marketCtx: MarketContext,
   intent: IntentResult
 ): Promise<ResearchOutput> {
+  const snapshot = marketCtx.snapshot ?? {
+    timestamp: Date.now(),
+    signals: {},
+    availableCount: 0,
+    totalCount: 0,
+  };
+
   const response = await deepseek.chat.completions.create({
     model: "deepseek-chat",
     messages: [
-      { role: "system", content: buildSystemPrompt(marketCtx, intent) },
+      { role: "system", content: buildSystemPrompt(snapshot, marketCtx.headlines, intent) },
       { role: "user", content: intent.normalizedQuestion },
     ],
     temperature: 0.5,
@@ -161,46 +128,31 @@ export async function generateResearch(
 
   const parsed = JSON.parse(raw);
 
-  // Determine which source data was actually available
-  const hasBtcPrice = marketCtx.snapshot?.btc?.price != null;
-  const hasNews = marketCtx.headlines.length > 0;
-  const availableSources = getAvailableDataSources(hasBtcPrice, hasNews);
-  const { activeIds } = formatActiveNarrativesForPrompt(availableSources);
+  // Build coverage analysis
+  const { insufficient } = buildNarrativeCoverageTable(snapshot.signals);
 
-  // Detect suppressed narratives (ones in registry but not active)
-  const suppressedIds: string[] = [];
-  for (const id of Object.keys(NARRATIVE_REGISTRY)) {
-    if (!activeIds.has(id)) {
-      suppressedIds.push(id);
-    }
-  }
-
-  // Validate narratives — resolve against registry, downgrade confidence for suppressed
+  // Validate narratives against coverage
   const validatedNarratives: ResearchNarrative[] = Array.isArray(parsed.narratives)
     ? parsed.narratives
         .filter((n: any) => {
-          // Filter out narratives the LLM shouldn't have used
-          const id = n.id || "";
-          const def = resolveNarrative(id);
-          // Only drop if it's not in the active list AND we have some data available
-          if (def && !activeIds.has(def.id) && (hasBtcPrice || hasNews)) {
-            return false;
-          }
-          return true;
+          // Drop insufficient-data narratives the LLM might have included anyway
+          const def = NARRATIVE_REGISTRY[n.id];
+          if (!def) return false;
+          const assessment = assessNarrative(n.id, snapshot.signals);
+          return assessment?.coverage !== "Insufficient Data";
         })
         .map((n: any) => {
-          const def = resolveNarrative(n.id || "");
-          // Downgrade confidence if narrative lacks data sources
-          const isSuppressed = def ? !activeIds.has(def.id) : false;
-          const confidence = isSuppressed ? "Low" : normalizeConfidence(n.confidence);
+          const def = NARRATIVE_REGISTRY[n.id];
+          const assessment = assessNarrative(n.id, snapshot.signals);
+          const coverage = assessment?.coverage ?? "Insufficient Data";
+          const ratio = assessment?.coverageRatio ?? 0;
 
           return {
-            id: def?.id || n.id || "UNKNOWN",
-            name: def?.name || n.name || n.id || "Unknown",
-            confidence,
-            reasoning: isSuppressed
-              ? `${n.reasoning || "Narrative identified but supporting data unavailable."} Note: real-time data for this narrative is currently unavailable — confidence downgraded to Low.`
-              : n.reasoning || "",
+            id: def?.id || n.id,
+            name: def?.name || n.name || "Unknown",
+            coverage,
+            coverageRatio: Math.round(ratio * 100) / 100,
+            reasoning: n.reasoning || "",
             indicators: Array.isArray(n.indicators)
               ? n.indicators.map((ind: any) => ({
                   label: ind.label || "",
@@ -208,13 +160,19 @@ export async function generateResearch(
                   signal: ["bullish", "bearish", "neutral"].includes(ind.signal)
                     ? ind.signal
                     : "neutral",
+                  isLive: ind.isLive === true,
                 }))
               : [],
           };
         })
     : [];
 
-  const overallConfidence = normalizeConfidence(parsed.confidence);
+  // Insufficient data narratives for UI display
+  const insufficientNarratives = insufficient.map((a) => ({
+    id: a.id,
+    name: a.name,
+    missingSignals: a.missingSignals,
+  }));
 
   return {
     intent: intent.intent,
@@ -222,11 +180,12 @@ export async function generateResearch(
     narratives: validatedNarratives,
     evidence: Array.isArray(parsed.evidence) ? parsed.evidence : [],
     risks: Array.isArray(parsed.risks) ? parsed.risks : [],
-    confidence: overallConfidence,
-    confidence_rationale:
-      parsed.confidence_rationale || confidenceRationale(overallConfidence),
-    market_context_used: hasBtcPrice || hasNews,
+    signal_coverage: {
+      available: snapshot.availableCount,
+      total: snapshot.totalCount,
+    },
+    market_context_used: snapshot.availableCount > 0 || marketCtx.headlines.length > 0,
     premise_corrected: intent.factCheckNote !== null,
-    suppressed_narratives: suppressedIds,
+    insufficient_data_narratives: insufficientNarratives,
   };
 }

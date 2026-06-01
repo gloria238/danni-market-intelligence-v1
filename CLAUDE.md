@@ -90,26 +90,65 @@ BTC is actually down 1.27% today.
 
 Implementation: `lib/intent.ts` — rule-based. Detects "why + asset + direction" patterns, rewrites as market analysis, injects factCheckNote into prompt. Not AI. Just regex.
 
-## 5d. Narrative Activation Conditions
+## 5d. Signal → Narrative Architecture
 
-A narrative can only appear if its data source is available. Never show "USD Weakness 65%" with "DXY: N/A".
-
-- Each narrative has `requiredDataSources: string[]`
-- Before prompt: only active narratives go to the LLM
-- After LLM response: suppressed narratives are filtered out
-- Suppressed narratives are shown in a "Data-Limited Narratives" section in the UI
-
-## 5e. Qualitative Confidence, Not Fake Percentages
-
-Until a real scoring formula exists, confidence labels are "High" / "Medium" / "Low" — NEVER percentages.
+The product has three layers. Never collapse them.
 
 ```
-❌ USD Weakness: 65%          ← User asks "why 65?" — system can't answer
-✅ USD Weakness: Medium        ← Honest about what's happening (LLM judgment)
+Layer 1: SIGNALS (lib/signals.ts)
+  Atomic data points. Each has a source (CoinGecko/FRED/Farside/NewsAPI).
+  A signal is either AVAILABLE or UNAVAILABLE — no middle ground.
+
+Layer 2: NARRATIVES (lib/narratives.ts)
+  Human stories built from signals. Each defines requiredSignals: string[].
+  Coverage = available signals / required signals.
+    ≥75% → "Strongly Supported"
+    ≥50% → "Partially Supported"
+    <50% → "Insufficient Data"
+
+Layer 3: MEMO (lib/ai.ts → memo-renderer.tsx)
+  LLM chooses from Strongly/Partially Supported narratives.
+  "Insufficient Data" narratives are shown in a "Coverage Analysis" section
+  explaining what data is missing — never dropped silently.
 ```
 
-`lib/ai.ts` type: `ConfidenceLevel = "High" | "Medium" | "Low"`
-`memo-renderer.tsx`: renders as a colored badge, not a number + progress bar
+When adding a new narrative:
+1. Define required SIGNALS first (in SIGNAL_REGISTRY)
+2. Wire the signal to a data source (in market-data.ts)
+3. Then create the narrative referencing those signals
+4. Never create a narrative that can't be backed by any signal we can fetch
+
+## 5e. Narrative Confidence = Signal Coverage
+
+Narrative confidence is derived from data coverage, not LLM opinion.
+
+```
+Strongly Supported → High confidence (≥75% signals available)
+Partially Supported → Medium confidence (≥50% signals available)
+Insufficient Data    → Low confidence → show in "Coverage Analysis" section
+```
+
+The LLM provides reasoning text, but the confidence label is system-computed.
+Never show subjective LLM confidence (65%) as a metric. Show data coverage
+(3/4 signals) which is verifiable.
+
+## 5f. Data Source Layer (V1.3+)
+
+Data sources are fetched independently, timeout gracefully, never block the request.
+
+```
+CoinGecko: BTC/ETH price + 24h change (free, no key)
+FRED:      DXY, US10Y, US2Y, Fed Funds, Gold (free key from research.stlouisfed.org)
+Farside:   BTC ETF net flow (free, no key)
+NewsAPI:   Latest headlines (free tier, optional key)
+```
+
+When a source key is missing (e.g., no FRED_API_KEY), the source returns nothing,
+signals stay as N/A, and narratives auto-degrade to lower coverage tiers.
+Everything is graceful — no error states, just less data.
+
+The priority order for adding data: ETF flows → DXY → FedWatch/Treasuries.
+These three unlock 7 of the 10 narratives to "Strongly Supported".
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 

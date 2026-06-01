@@ -1,202 +1,228 @@
 // Narrative Registry — the product's knowledge base.
-// LLM matches from this registry; it does NOT invent narratives.
 //
-// Each narrative defines `requiredDataSources` — narrative can only appear
-// when at least one required data source is available. This prevents
-// "USD Weakness 65%" with N/A DXY data (the "trust me bro" problem).
+// A Narrative = human-interpretable story + required signals.
+// Signals are the atomic data layer (see lib/signals.ts).
+// Coverage is computed from (available signals / required signals) per narrative.
+
+import { type SignalValue, assessCoverage, type CoverageLevel } from "@/lib/signals";
 
 export interface NarrativeDef {
   id: string;
   name: string;
   description: string;
-  indicators: string[];
   promptContext: string;
-  /** Data source keys — narrative only activates if ≥1 source has data available */
-  requiredDataSources: string[];
+  /** Signal IDs that MUST be available for this narrative to be well-supported */
+  requiredSignals: string[];
+}
+
+export interface NarrativeAssessment {
+  id: string;
+  name: string;
+  coverage: CoverageLevel;
+  /** Ratio — how many required signals are available */
+  coverageRatio: number;
+  /** Matched signal values */
+  availableSignals: SignalValue[];
+  /** Signal IDs that are missing */
+  missingSignals: string[];
+  /** LLM-provided reasoning text */
+  reasoning: string;
+  /** LLM-provided confidence (now subordinated to coverage) */
+  confidence: "High" | "Medium" | "Low";
 }
 
 export const NARRATIVE_REGISTRY: Record<string, NarrativeDef> = {
   ETF_FLOW: {
     id: "ETF_FLOW",
     name: "ETF Flows",
-    description: "Significant capital flows through spot Bitcoin/ETH ETFs",
-    indicators: ["BTC ETF Net Flow", "ETH ETF Net Flow", "ETF Volume", "IBIT / FBTC Flow"],
+    description: "Capital flows through spot Bitcoin/ETH ETFs driving price action",
     promptContext:
-      "Strong ETF inflows signal institutional demand. Track net daily flows (CoinShares, Farside data). Inflows > $100M/day are bullish; sustained outflows are bearish.",
-    requiredDataSources: ["etf_data"],
+      "ETF flows are the most transparent institutional demand signal. Inflows > $100M/day are unambiguously bullish; sustained outflows signal risk-off positioning.",
+    requiredSignals: ["BTC_ETF_FLOW", "BTC_PRICE", "BTC_24H_CHANGE"],
   },
 
   RATE_CUT_EXPECTATIONS: {
     id: "RATE_CUT_EXPECTATIONS",
     name: "Rate Cut Expectations",
     description: "Market pricing increased probability of central bank rate cuts",
-    indicators: ["FedWatch", "US10Y Yield", "DXY", "Fed Funds Futures"],
     promptContext:
-      "Falling rate expectations weaken USD, lower bond yields, and boost risk assets. Track CME FedWatch for probability shifts.",
-    requiredDataSources: ["macro_data"],
+      "When short-term yields fall faster than long-term (bull steepening), markets are pricing rate cuts. Falling US2Y + rising Fed funds futures probability = dovish pivot expected.",
+    requiredSignals: ["US2Y_YIELD", "US10Y_YIELD", "FED_FUNDS_RATE", "DXY_INDEX"],
   },
 
   USD_WEAKNESS: {
     id: "USD_WEAKNESS",
     name: "USD Weakness",
     description: "Declining US Dollar index boosting dollar-denominated assets",
-    indicators: ["DXY", "EUR/USD", "CNY/USD", "Gold Price"],
     promptContext:
-      "A weak USD makes Bitcoin/commodities cheaper for foreign buyers and signals risk appetite.",
-    requiredDataSources: ["macro_data"],
+      "A weak USD benefits Bitcoin, gold, and EM assets. DXY < 100 is structurally weak. Track DXY direction + gold correlation.",
+    requiredSignals: ["DXY_INDEX", "GOLD_PRICE", "BTC_PRICE"],
   },
 
   RISK_ON_SENTIMENT: {
     id: "RISK_ON_SENTIMENT",
     name: "Risk-On Sentiment",
-    description: "Broad market shift toward risk assets (stocks up, VIX down)",
-    indicators: ["SPX", "NASDAQ", "VIX", "Fear & Greed Index"],
+    description: "Broad shift toward risk assets — equities up, yields up, USD down",
     promptContext:
-      "When equities rally and VIX is low, crypto typically benefits from spillover risk appetite.",
-    requiredDataSources: ["macro_data"],
+      "When BTC correlates positively with SPX and negatively with DXY, it's trading like a risk asset. Falling VIX + rising equities signal risk appetite.",
+    requiredSignals: ["DXY_INDEX", "US10Y_YIELD", "BTC_PRICE"],
   },
 
   SHORT_SQUEEZE: {
     id: "SHORT_SQUEEZE",
     name: "Short Squeeze",
-    description: "Rapid price increase forcing short sellers to cover positions",
-    indicators: ["Funding Rate", "Open Interest", "Liquidations (Short)", "Basis"],
+    description: "Rapid price increase forcing short sellers to cover",
     promptContext:
-      "Negative funding rates + high OI + large short liquidations = likely short squeeze. Unsustainable rally pattern.",
-    requiredDataSources: ["derivatives_data"],
+      "Short squeezes are unsustainable by nature. Key signatures: negative funding → rapid price spike → liquidations cascade. Typically resolves within 24-72 hours.",
+    requiredSignals: ["BTC_PRICE", "BTC_24H_CHANGE"],
   },
 
   INSTITUTIONAL_BUYING: {
     id: "INSTITUTIONAL_BUYING",
     name: "Institutional Buying",
-    description: "Large institutions accumulating spot or futures positions",
-    indicators: ["CME OI", "ETF Flow", "Coinbase Premium", "OTC Volume"],
+    description: "Large institutions accumulating spot or ETF positions",
     promptContext:
-      "CME OI rising + positive Coinbase premium = institutional accumulation. CME is the institutional venue; Coinbase premium shows US demand.",
-    requiredDataSources: ["etf_data", "derivatives_data"],
+      "Institutional flow is 'sticky money' — unlike leverage, it doesn't unwind overnight. ETF inflows + strong BTC price action = likely institutional accumulation.",
+    requiredSignals: ["BTC_ETF_FLOW", "BTC_PRICE", "BTC_24H_CHANGE"],
   },
 
   REGULATORY_RELIEF: {
     id: "REGULATORY_RELIEF",
     name: "Regulatory Relief",
     description: "Positive regulatory developments reducing policy uncertainty",
-    indicators: ["SEC Updates", "Legislation Progress", "Court Rulings", "Political Statements"],
     promptContext:
-      "Positive regulatory news reduces the 'policy risk premium' baked into crypto assets. Track SEC statements, court rulings, and legislative progress.",
-    requiredDataSources: ["news_data"],
+      "Regulatory clarity reduces the 'policy risk premium' in crypto. Track SEC statements, court rulings, and legislative progress. This is primarily news-driven.",
+    requiredSignals: ["MARKET_NEWS", "BTC_PRICE"],
   },
 
   MACRO_EASING: {
     id: "MACRO_EASING",
     name: "Macro Easing",
     description: "Central bank liquidity expansion boosting all financial assets",
-    indicators: ["Fed Balance Sheet", "Reverse Repo", "Global M2", "PBOC Liquidity"],
     promptContext:
-      "Central bank balance sheet expansion increases global liquidity, which historically correlates with crypto bull markets.",
-    requiredDataSources: ["macro_data"],
+      "Declining Fed funds rate + falling yields + weak USD = macro easing regime. This is historically the most bullish backdrop for Bitcoin.",
+    requiredSignals: ["FED_FUNDS_RATE", "US10Y_YIELD", "DXY_INDEX", "GOLD_PRICE"],
   },
 
   TECHNICAL_BREAKOUT: {
     id: "TECHNICAL_BREAKOUT",
     name: "Technical Breakout",
-    description: "Price breaking through key technical levels triggering momentum",
-    indicators: ["BTC Price vs MA200", "RSI", "Volume", "Key Resistance"],
+    description: "Price breaking through key technical levels",
     promptContext:
-      "Break above key moving averages or resistance levels triggers momentum buying. Higher volume on breakout = higher conviction.",
-    requiredDataSources: ["price_data"],
+      "Breakouts need volume confirmation. A breakout on declining volume is a false signal. Track price action relative to recent range.",
+    requiredSignals: ["BTC_PRICE", "BTC_24H_CHANGE"],
   },
 
   GEOPOLITICAL_SAFE_HAVEN: {
     id: "GEOPOLITICAL_SAFE_HAVEN",
     name: "Geopolitical Safe Haven",
     description: "Geopolitical tensions driving demand for decentralized assets",
-    indicators: ["Gold Price", "BTC/Gold Ratio", "Geopolitical Risk Index", "Oil Price"],
     promptContext:
-      "During geopolitical crises, Bitcoin sometimes trades as a non-sovereign safe haven alongside gold.",
-    requiredDataSources: ["macro_data", "news_data"],
+      "In geopolitical crises, Bitcoin sometimes trades as non-sovereign money alongside gold. Gold + BTC rising together with DXY also rising suggests safe-haven bid, not risk appetite.",
+    requiredSignals: ["GOLD_PRICE", "BTC_PRICE", "DXY_INDEX", "MARKET_NEWS"],
   },
 };
 
-/** Which data sources are currently available? */
-export function getAvailableDataSources(hasBtcPrice: boolean, hasNews: boolean): Set<string> {
-  const available = new Set<string>();
+/* ——— Coverage Assessment ——— */
 
-  if (hasBtcPrice) {
-    available.add("price_data");
-    available.add("derivatives_data"); // if we can get price, derivatives likely available too
-  }
+export function assessNarrative(
+  narrativeId: string,
+  signals: Record<string, SignalValue>
+): NarrativeAssessment | null {
+  const def = NARRATIVE_REGISTRY[narrativeId];
+  if (!def) return null;
 
-  if (hasNews) {
-    available.add("news_data");
-  }
+  const availableSignals: SignalValue[] = [];
+  const missingSignals: string[] = [];
 
-  // Free tier doesn't have SPX/DXY/US10Y — these are always unavailable
-  // Uncomment when premium data API is added:
-  // available.add("macro_data");
-  // available.add("etf_data");
-
-  return available;
-}
-
-/** Filter registry to only narratives viable with current data availability */
-export function getActiveNarrativeIds(availableSources: Set<string>): Set<string> {
-  const active = new Set<string>();
-
-  for (const [id, def] of Object.entries(NARRATIVE_REGISTRY)) {
-    const hasAnySource = def.requiredDataSources.some((src) => availableSources.has(src));
-    if (hasAnySource) {
-      active.add(id);
+  for (const sigId of def.requiredSignals) {
+    const sigVal = signals[sigId];
+    if (sigVal?.available) {
+      availableSignals.push(sigVal);
+    } else {
+      missingSignals.push(sigId);
     }
   }
 
-  // If nothing is available (no real-time data at all), ALL narratives are "low confidence" but still allowed
-  if (active.size === 0) {
-    return new Set(Object.keys(NARRATIVE_REGISTRY));
-  }
+  const coverageRatio = def.requiredSignals.length > 0
+    ? availableSignals.length / def.requiredSignals.length
+    : 0;
+  const coverage = assessCoverage(availableSignals.length, def.requiredSignals.length);
 
-  return active;
+  return {
+    id: def.id,
+    name: def.name,
+    coverage,
+    coverageRatio,
+    availableSignals,
+    missingSignals,
+    reasoning: "",
+    confidence: coverage === "Strongly Supported" ? "High" : coverage === "Partially Supported" ? "Medium" : "Low",
+  };
 }
 
-// Helper: generate prompt block for ONLY active narratives
-export function formatActiveNarrativesForPrompt(availableSources: Set<string>): {
-  block: string;
-  activeIds: Set<string>;
+export function buildNarrativeCoverageTable(
+  signals: Record<string, SignalValue>
+): {
+  supported: NarrativeAssessment[];
+  partial: NarrativeAssessment[];
+  insufficient: NarrativeAssessment[];
 } {
-  const activeIds = getActiveNarrativeIds(availableSources);
-  const entries = Object.values(NARRATIVE_REGISTRY).filter((n) => activeIds.has(n.id));
+  const supported: NarrativeAssessment[] = [];
+  const partial: NarrativeAssessment[] = [];
+  const insufficient: NarrativeAssessment[] = [];
 
-  let block = entries
-    .map(
-      (n) =>
-        `- ${n.id}: ${n.description}. Key indicators: ${n.indicators.join(", ")}. ${n.promptContext}`
-    )
-    .join("\n");
+  for (const id of Object.keys(NARRATIVE_REGISTRY)) {
+    const assessment = assessNarrative(id, signals);
+    if (!assessment) continue;
 
-  // List suppressed narratives
-  const suppressed = Object.values(NARRATIVE_REGISTRY).filter((n) => !activeIds.has(n.id));
-  if (suppressed.length > 0) {
-    block +=
-      "\n\n## NARRATIVES SUPPRESSED (INSUFFICIENT DATA)\n" +
-      suppressed
-        .map(
-          (n) =>
-            `- ${n.id}: UNAVAILABLE — data sources missing: ${n.requiredDataSources.join(", ")}. DO NOT use this narrative.`
-        )
-        .join("\n");
+    if (assessment.coverage === "Strongly Supported") supported.push(assessment);
+    else if (assessment.coverage === "Partially Supported") partial.push(assessment);
+    else insufficient.push(assessment);
   }
 
-  return { block, activeIds };
+  return { supported, partial, insufficient };
 }
 
-// Backward-compatible wrapper
-export function formatNarrativeRegistryForPrompt(): string {
-  const { block } = formatActiveNarrativesForPrompt(
-    new Set(Object.keys(NARRATIVE_REGISTRY))
-  );
-  return block;
+/* ——— Prompt formatting ——— */
+
+export function formatNarrativesForPrompt(
+  signals: Record<string, SignalValue>
+): string {
+  const { supported, partial, insufficient } = buildNarrativeCoverageTable(signals);
+
+  let block = "";
+
+  if (supported.length > 0) {
+    block += "## STRONGLY SUPPORTED NARRATIVES (prioritize these)\n";
+    for (const a of supported) {
+      const def = NARRATIVE_REGISTRY[a.id];
+      block += `- ${a.id}: ${def.description} (${a.availableSignals.length}/${def.requiredSignals.length} signals available)\n  ${def.promptContext}\n`;
+    }
+    block += "\n";
+  }
+
+  if (partial.length > 0) {
+    block += "## PARTIALLY SUPPORTED NARRATIVES (use cautiously — data gaps exist)\n";
+    for (const a of partial) {
+      const def = NARRATIVE_REGISTRY[a.id];
+      block += `- ${a.id}: ${def.description} (${a.availableSignals.length}/${def.requiredSignals.length} signals available, missing: ${a.missingSignals.join(", ")})\n  ${def.promptContext}\n`;
+    }
+    block += "\n";
+  }
+
+  if (insufficient.length > 0) {
+    block += "## INSUFFICIENT DATA NARRATIVES (DO NOT USE — no supporting data)\n";
+    for (const a of insufficient) {
+      const def = NARRATIVE_REGISTRY[a.id];
+      block += `- ${a.id}: ${def.description} (${a.availableSignals.length}/${def.requiredSignals.length} signals available)\n  DO NOT include this narrative. Required signals unavailable.\n`;
+    }
+  }
+
+  return block || "No narrative data available.";
 }
 
-// Helper: map LLM narrative IDs back to full definitions
+// Manual backward compat
 export function resolveNarrative(id: string): NarrativeDef | undefined {
   const normalized = id.toUpperCase().replace(/\s+/g, "_");
   return NARRATIVE_REGISTRY[normalized] || NARRATIVE_REGISTRY[id];

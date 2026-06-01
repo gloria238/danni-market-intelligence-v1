@@ -4,19 +4,24 @@ import {
   assessNarrative,
   buildNarrativeCoverageTable,
   formatNarrativesForPrompt,
-  type NarrativeAssessment,
 } from "@/lib/narratives";
-import type { SignalValue, SignalDirection } from "@/lib/signals";
+import type { SignalDirection } from "@/lib/signals";
 import type { MarketContext, MarketSnapshot } from "@/lib/market-data";
 import { formatMarketContextForPrompt } from "@/lib/market-data";
 import type { IntentResult } from "@/lib/intent";
+import {
+  detectDivergences,
+  formatCrossSignalForPrompt,
+  type DivergenceObservation,
+  type CrossSignalAnalysis,
+} from "@/lib/expectations";
 
 const deepseek = new OpenAI({
   apiKey: process.env.DEEPSEEK_API_KEY,
   baseURL: "https://api.deepseek.com",
 });
 
-// ——— Types ———
+/* ——— Types ——— */
 
 export interface NarrativeIndicator {
   label: string;
@@ -33,7 +38,6 @@ export type ResearchNarrative = {
   requiredStatus: { available: number; total: number };
   indicators: NarrativeIndicator[];
   reasoning: string;
-  /** Signal pattern that supports/contradicts this narrative */
   directionalAssessment: string;
 };
 
@@ -52,24 +56,32 @@ export interface ResearchOutput {
     missingSignals: string[];
     directionalLogic: string;
   }[];
+  /** V1.5: Cross-signal divergence analysis */
+  cross_signals: CrossSignalAnalysis;
 }
 
-// ——— Prompt builder ———
+/* ——— Prompt builder ——— */
 
 function buildSystemPrompt(
   snapshot: MarketSnapshot,
   headlines: { title: string; source: string; url?: string; publishedAt?: string }[],
-  intent: IntentResult
+  intent: IntentResult,
+  crossSignal: CrossSignalAnalysis
 ): string {
   const marketBlock = formatMarketContextForPrompt(snapshot, headlines as any);
   const narrativeBlock = formatNarrativesForPrompt(snapshot.signals);
+  const divergenceBlock = formatCrossSignalForPrompt(crossSignal);
 
-  return `You are a senior market analyst. Your analysis is data-grounded — never speculative.
+  return `You are a senior market analyst at a macro research firm. Your analysis is data-grounded — never speculative.
+
+Your most valuable insight is often a DIVERGENCE — what SHOULD be happening vs what IS happening — not just narrative confirmation. A contradiction between signals is as informative as alignment.
 
 ## USER INTENT
 Intent: ${intent.intent}
 Question: "${intent.normalizedQuestion}"
 ${intent.factCheckNote || ""}
+
+${divergenceBlock}
 
 ## NARRATIVE FRAMEWORK
 ${narrativeBlock}
@@ -79,36 +91,32 @@ ${marketBlock}
 ## OUTPUT — Return ONLY valid JSON
 
 {
-  "summary": "3-4 sentence summary. Reference specific data values. If the premise is wrong, address it first, then provide the analysis the user actually needs.",
+  "summary": "3-4 sentence summary. LEAD with the most interesting finding — a divergence if one exists. If macro signals are supportive but BTC is declining, that IS the story. Reference specific values. Never write 'nothing significant' — there is always a story in the data relationships.",
   "narratives": [
     {
       "id": "NARRATIVE_ID",
-      "reasoning": "1-2 sentences EXPLICITLY referencing specific data values from the Available signals above.",
-      "directional_assessment": "1 sentence interpreting the signal direction pattern: e.g. 'DXY ↓ from 119.37 to 119.29 + Gold ↑ → USD weakness signal strengthening'",
+      "reasoning": "1-2 sentences referencing specific data values. If the divergence analysis above reveals a contradiction, explain how that affects this narrative.",
+      "directional_assessment": "1 sentence interpreting signal direction: e.g. 'Macro signals supportive (DXY ↓, US10Y ↓) but BTC not responding → crypto-specific headwind dominant'",
       "indicators": [
-        { "label": "DXY", "value": "119.29", "signal": "bearish", "isLive": true, "direction": "falling" },
-        { "label": "Gold (XAUT)", "value": "$3,124", "signal": "bullish", "isLive": true, "direction": "rising" }
+        { "label": "DXY", "value": "119.29", "signal": "bearish", "isLive": true, "direction": "falling" }
       ]
     }
   ],
-  "evidence": ["Data point 1 from Available signals", "Data point 2 from Available signals"],
-  "risks": ["What could invalidate the primary narrative", "Key uncertainty"]
+  "evidence": ["Data point from Available signals", "Cross-signal observation"],
+  "risks": ["What could invalidate the primary narrative", "The divergence could resolve in either direction"]
 }
 
 ## STRICT RULES
-1. ONLY use narratives from the "ASSESSABLE" section above. NEVER reference "NOT ASSESSABLE" narratives.
-2. Each indicator MUST come from that narrative's available signals. Check the signal list above each narrative.
-3. indicator "value" must match the actual data value shown in Available signals. Do not invent or approximate.
-4. Set "isLive": true ONLY if the value came from Available signals. Set false if you're estimating.
-5. "signal" must be "bullish", "bearish", or "neutral" based on the data direction.
-6. "direction" must be "rising", "falling", or "stable" from the data.
-7. Evidence items must reference specific signal values.
-8. If a narrative's directional logic contradicts the current data, say so in reasoning.
-9. If only 1-2 narratives are assessable and data is sparse, acknowledge this in the summary.
-10. Do NOT use BTC price as evidence for institutional buying. Use ETF flow. Each signal belongs to its narrative.`;
+1. ONLY use narratives from "ASSESSABLE" — never "NOT ASSESSABLE".
+2. Lead the summary with the cross-signal story. A divergence is more interesting than a confirmation.
+3. Each indicator MUST come from that narrative's signal set. Value must match Available data.
+4. "isLive": true ONLY for values from Available signals.
+5. "signal": "bullish"/"bearish"/"neutral" based on data direction.
+6. Evidence items must reference specific values.
+7. If a narrative's directional logic contradicts current data, say so — that's useful.`;
 }
 
-// ——— Main ———
+/* ——— Main ——— */
 
 export async function generateResearch(
   question: string,
@@ -122,7 +130,7 @@ export async function generateResearch(
     totalCount: 0,
   };
 
-  // Populate MARKET_NEWS signal if headlines exist
+  // Populate MARKET_NEWS signal
   if (marketCtx.headlines.length > 0 && snapshot.signals.MARKET_NEWS) {
     snapshot.signals.MARKET_NEWS = {
       signalId: "MARKET_NEWS",
@@ -138,12 +146,20 @@ export async function generateResearch(
     ).length;
   }
 
+  // V1.5: Run divergence detection BEFORE LLM call — pure computation
+  const crossSignal = detectDivergences(snapshot.signals);
+
   const response = await deepseek.chat.completions.create({
     model: "deepseek-chat",
     messages: [
       {
         role: "system",
-        content: buildSystemPrompt(snapshot, marketCtx.headlines, intent),
+        content: buildSystemPrompt(
+          snapshot,
+          marketCtx.headlines,
+          intent,
+          crossSignal
+        ),
       },
       { role: "user", content: intent.normalizedQuestion },
     ],
@@ -157,23 +173,18 @@ export async function generateResearch(
 
   const parsed = JSON.parse(raw);
 
-  // Build coverage table
+  // Coverage table
   const { assessable, notAssessable } = buildNarrativeCoverageTable(
     snapshot.signals
   );
   const assessableIds = new Set(assessable.map((a) => a.id));
 
-  // Validate — ONLY keep narratives that are assessable
+  // Validate narratives — hard gate
   const validatedNarratives: ResearchNarrative[] = Array.isArray(
     parsed.narratives
   )
     ? parsed.narratives
-        .filter((n: any) => {
-          const id = n.id || "";
-          // Hard gate: narrative MUST be in assessable list
-          if (!assessableIds.has(id)) return false;
-          return true;
-        })
+        .filter((n: any) => assessableIds.has(n.id || ""))
         .map((n: any) => {
           const def = NARRATIVE_REGISTRY[n.id];
           const assessment = assessNarrative(n.id, snapshot.signals);
@@ -192,14 +203,12 @@ export async function generateResearch(
             directionalAssessment: n.directional_assessment || "",
             indicators: Array.isArray(n.indicators)
               ? n.indicators
-                  // Filter to ONLY indicators from this narrative's signal set
                   .filter((ind: any) => {
-                    if (!def) return true; // can't validate, keep
+                    if (!def) return true;
                     const allSignals = [
                       ...def.requiredSignals,
                       ...def.enhancingSignals,
                     ];
-                    // Match by label or common patterns
                     const indLabel = String(ind.label || "").toLowerCase();
                     return allSignals.some((sigId) => {
                       const sigDef = snapshot.signals[sigId];
@@ -229,7 +238,6 @@ export async function generateResearch(
         })
     : [];
 
-  // Not-assessable for UI display
   const notAssessableList = notAssessable.map((a) => ({
     id: a.id,
     name: a.name,
@@ -251,5 +259,6 @@ export async function generateResearch(
       snapshot.availableCount > 0 || marketCtx.headlines.length > 0,
     premise_corrected: intent.factCheckNote !== null,
     not_assessable: notAssessableList,
+    cross_signals: crossSignal,
   };
 }

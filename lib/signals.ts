@@ -1,34 +1,37 @@
 // Signal Registry — atomic data points that narratives are built from.
 //
-// A Signal = one measurable data point with a source.
-// A Narrative = a collection of signals + an interpretation.
+// Layer 1 of the reasoning stack:
+//   SIGNALS → NARRATIVES → MEMO
 //
-// Coverage = (signals with data) / (required signals)
-//   ≥75% → Strongly Supported
-//   ≥50% → Partially Supported
-//   <50% → Insufficient Data
+// Each signal has a direction (rising/falling/stable) derived from
+// multi-observational context, not just a point value.
 
 /* ——— Signal Definition ——— */
 
-export type SignalSource = "coingecko" | "fred" | "farside" | "newsapi" | "manual";
+export type SignalSource = "coingecko" | "fred" | "farside" | "newsapi";
+
+export type SignalDirection = "rising" | "falling" | "stable";
 
 export interface SignalDef {
   id: string;
   label: string;
   description: string;
   source: SignalSource;
-  /** FRED series ID, CoinGecko coin ID, etc. */
+  /** FRED series ID, CoinGecko coin ID, Farside endpoint key, etc. */
   sourceId: string;
-  /** For FRED: how to transform the observation value */
-  transform?: "value" | "percent_change" | "inverse";
 }
 
 export interface SignalValue {
   signalId: string;
   label: string;
+  /** Formatted display value, e.g. "$72,906" or "4.45%" */
   value: string;
   rawValue: number | null;
   available: boolean;
+  /** Direction derived from multi-point context, not just sign */
+  direction: SignalDirection | null;
+  /** 1-sentence context, e.g. "↓ from 4.48% prior close" */
+  directionContext: string | null;
 }
 
 /* ——— All Signals ——— */
@@ -56,20 +59,18 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     source: "coingecko",
     sourceId: "ethereum",
   },
-
-  // CoinGecko — uses tokenized gold (XAUT/PAXG) as proxy for spot gold
   GOLD_PRICE: {
     id: "GOLD_PRICE",
-    label: "Gold Price",
-    description: "Gold price via tokenized gold proxy (tether-gold, 1 XAUT ≈ 1 oz gold)",
+    label: "Gold (XAUT)",
+    description: "Gold price via tokenized proxy (tether-gold, 1 XAUT ≈ 1 troy oz)",
     source: "coingecko",
     sourceId: "tether-gold",
   },
 
-  // FRED — free API key required (https://fred.stlouisfed.org/docs/api/api_key.html)
+  // FRED — free API key (https://fred.stlouisfed.org/docs/api/api_key.html)
   DXY_INDEX: {
     id: "DXY_INDEX",
-    label: "DXY Index",
+    label: "DXY",
     description: "Trade-Weighted Broad Dollar Index (daily)",
     source: "fred",
     sourceId: "DTWEXBGS",
@@ -84,7 +85,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
   US2Y_YIELD: {
     id: "US2Y_YIELD",
     label: "US 2Y Yield",
-    description: "2-Year Treasury Constant Maturity Rate",
+    description: "2-Year Treasury Constant Maturity Rate (policy-sensitive)",
     source: "fred",
     sourceId: "DGS2",
   },
@@ -95,11 +96,12 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     source: "fred",
     sourceId: "FEDFUNDS",
   },
-  // Farside — free, no key (ETF flow data)
+
+  // Farside — free, no key
   BTC_ETF_FLOW: {
     id: "BTC_ETF_FLOW",
-    label: "BTC ETF Net Flow",
-    description: "Daily net BTC ETF flow across all funds (Farside)",
+    label: "BTC ETF Flow",
+    description: "Daily net BTC ETF flow across all US spot ETFs (Farside)",
     source: "farside",
     sourceId: "btc",
   },
@@ -108,35 +110,27 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
   MARKET_NEWS: {
     id: "MARKET_NEWS",
     label: "Market News",
-    description: "Latest market headlines",
+    description: "Latest market headlines (newsapi.org)",
     source: "newsapi",
     sourceId: "crypto",
   },
 };
 
-/* ——— Coverage Assessment ——— */
+/* ——— Coverage levels (hard gates) ——— */
 
-export type CoverageLevel = "Strongly Supported" | "Partially Supported" | "Insufficient Data";
+export type CoverageLevel = "Assessable" | "Not Assessable";
 
-export function assessCoverage(availableCount: number, requiredCount: number): CoverageLevel {
-  if (requiredCount === 0) return "Insufficient Data";
-  const ratio = availableCount / requiredCount;
-  if (ratio >= 0.75) return "Strongly Supported";
-  if (ratio >= 0.5) return "Partially Supported";
-  return "Insufficient Data";
-}
-
-export function coverageLabel(level: CoverageLevel): string {
-  return level;
+export function assessCoverage(
+  availableRequiredCount: number,
+  requiredCount: number
+): CoverageLevel {
+  return availableRequiredCount === requiredCount
+    ? "Assessable"
+    : "Not Assessable";
 }
 
 export function coverageDescription(level: CoverageLevel): string {
-  switch (level) {
-    case "Strongly Supported":
-      return "Most required data signals are available — this narrative is well-grounded.";
-    case "Partially Supported":
-      return "Some signals are available but data gaps reduce conviction.";
-    case "Insufficient Data":
-      return "Too few signals available to assess this narrative credibly.";
-  }
+  return level === "Assessable"
+    ? "All required signals available — this narrative can be evaluated."
+    : "One or more required signals unavailable — this narrative cannot be assessed without speculation.";
 }

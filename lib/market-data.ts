@@ -1,23 +1,21 @@
 // Market Data Layer — unified data fetching for all signal sources.
 //
 // Sources:
-//   CoinGecko  — BTC/ETH price (free, no key)
-//   FRED       — DXY, US10Y, US2Y, Fed Funds, Gold (free key from research.stlouisfed.org)
-//   Farside    — BTC ETF flows (free, no key)
+//   CoinGecko  — BTC/ETH/Gold price + 24h change (free, no key)
+//   FRED       — DXY, US10Y, US2Y, Fed Funds (free key from research.stlouisfed.org)
+//   Farside    — BTC ETF daily net flow (free, no key)
 //   NewsAPI    — headlines (free tier, 100 req/day)
 //
-// Each source fetches independently, times out gracefully, never blocks the request.
+// Each source fetches independently, times out gracefully, never blocks.
 
-import type { SignalValue } from "@/lib/signals";
+import type { SignalValue, SignalDirection } from "@/lib/signals";
 import { SIGNAL_REGISTRY } from "@/lib/signals";
 
 // ——— Types ———
 
 export interface MarketSnapshot {
   timestamp: number;
-  /** All resolved signal values, keyed by signal ID */
   signals: Record<string, SignalValue>;
-  /** Count of signals with actual data */
   availableCount: number;
   totalCount: number;
 }
@@ -38,10 +36,7 @@ export interface MarketContext {
 
 const FETCH_TIMEOUT = 8000;
 
-async function safeFetch(
-  url: string,
-  opts: RequestInit = {}
-): Promise<Response | null> {
+async function safeFetch(url: string, opts: RequestInit = {}): Promise<Response | null> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
   try {
@@ -62,10 +57,18 @@ function nullSignal(id: string): SignalValue {
     value: "N/A",
     rawValue: null,
     available: false,
+    direction: null,
+    directionContext: null,
   };
 }
 
-function valueSignal(id: string, rawValue: number, format: string): SignalValue {
+function valueSignal(
+  id: string,
+  rawValue: number,
+  format: string,
+  direction: SignalDirection | null = null,
+  directionContext: string | null = null
+): SignalValue {
   const def = SIGNAL_REGISTRY[id];
   return {
     signalId: id,
@@ -73,7 +76,16 @@ function valueSignal(id: string, rawValue: number, format: string): SignalValue 
     value: format,
     rawValue,
     available: true,
+    direction,
+    directionContext,
   };
+}
+
+function deriveDirection(current: number, previous: number): { direction: SignalDirection | null; context: string } {
+  const delta = current - previous;
+  if (Math.abs(delta) < 0.001) return { direction: "stable", context: "unchanged from prior" };
+  if (delta > 0) return { direction: "rising", context: `↑ from ${previous.toFixed(2)} prior` };
+  return { direction: "falling", context: `↓ from ${previous.toFixed(2)} prior` };
 }
 
 // ——— CoinGecko ———
@@ -87,60 +99,83 @@ async function fetchCoinGecko(): Promise<Record<string, SignalValue>> {
 
   const data = await res.json();
 
-  if (data?.bitcoin?.usd != null) {
-    signals.BTC_PRICE = valueSignal(
-      "BTC_PRICE",
-      data.bitcoin.usd,
-      `$${data.bitcoin.usd.toLocaleString()}`
-    );
+  // BTC Price — direction from 24h change sign
+  const btcUsd = data?.bitcoin?.usd;
+  if (btcUsd != null) {
+    const change24h = data?.bitcoin?.usd_24h_change;
+    const dir: SignalDirection | null = change24h != null
+      ? change24h > 0.5 ? "rising" : change24h < -0.5 ? "falling" : "stable"
+      : null;
+    const ctx: string | null = change24h != null
+      ? `24h: ${change24h >= 0 ? "+" : ""}${change24h.toFixed(2)}%`
+      : null;
+    signals.BTC_PRICE = valueSignal("BTC_PRICE", btcUsd, `$${btcUsd.toLocaleString()}`, dir, ctx);
   }
+
+  // BTC 24h Change — direction IS the signal
   if (data?.bitcoin?.usd_24h_change != null) {
     const v = data.bitcoin.usd_24h_change;
+    const dir: SignalDirection = v > 0.5 ? "rising" : v < -0.5 ? "falling" : "stable";
     signals.BTC_24H_CHANGE = valueSignal(
-      "BTC_24H_CHANGE",
-      v,
-      `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`
+      "BTC_24H_CHANGE", v, `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`,
+      dir,
+      dir === "rising" ? "Price increasing over 24h" : dir === "falling" ? "Price decreasing over 24h" : "Flat over 24h"
     );
   }
+
+  // ETH
   if (data?.ethereum?.usd != null) {
-    signals.ETH_PRICE = valueSignal(
-      "ETH_PRICE",
-      data.ethereum.usd,
-      `$${data.ethereum.usd.toLocaleString()}`
-    );
+    signals.ETH_PRICE = valueSignal("ETH_PRICE", data.ethereum.usd, `$${data.ethereum.usd.toLocaleString()}`);
   }
-  if (data?.["tether-gold"]?.usd != null) {
-    signals.GOLD_PRICE = valueSignal(
-      "GOLD_PRICE",
-      data["tether-gold"].usd,
-      `$${data["tether-gold"].usd.toLocaleString()}`
-    );
+
+  // Gold (XAUT proxy)
+  const goldUsd = data?.["tether-gold"]?.usd;
+  if (goldUsd != null) {
+    const change24h = data?.["tether-gold"]?.usd_24h_change;
+    const dir: SignalDirection | null = change24h != null
+      ? change24h > 0.3 ? "rising" : change24h < -0.3 ? "falling" : "stable"
+      : null;
+    const ctx: string | null = change24h != null
+      ? `24h: ${change24h >= 0 ? "+" : ""}${change24h.toFixed(2)}%`
+      : null;
+    signals.GOLD_PRICE = valueSignal("GOLD_PRICE", goldUsd, `$${goldUsd.toLocaleString()}`, dir, ctx);
   }
 
   return signals;
 }
 
 // ——— FRED ———
-// Free API key from: https://fred.stlouisfed.org/docs/api/api_key.html
+// Returns { latest, previous } for directional comparison
 
-async function fetchFredSeries(seriesId: string): Promise<number | null> {
+async function fetchFredSeries(seriesId: string): Promise<{ latest: number; previous: number } | null> {
   const apiKey = process.env.FRED_API_KEY;
   if (!apiKey) return null;
 
   const res = await safeFetch(
-    `https://api.stlouisfed.org/fred/series/observations?series_id=${seriesId}&api_key=${apiKey}&file_type=json&limit=2&sort_order=desc`
+    `https://api.stlouisfed.org/fred/series/observations?series_id=${seriesId}&api_key=${apiKey}&file_type=json&limit=30&sort_order=desc`
   );
   if (!res) return null;
 
   try {
     const data = await res.json();
     const observations = data?.observations;
-    if (!observations || observations.length === 0) return null;
+    if (!observations || observations.length < 2) return null;
 
-    // Get latest non-numeric observation value
-    const latest = observations[0];
-    const val = parseFloat(latest?.value);
-    return isNaN(val) ? null : val;
+    // Walk forward from most recent to find valid numeric values
+    const values: number[] = [];
+    for (const obs of observations) {
+      const v = parseFloat(obs?.value);
+      if (!isNaN(v)) values.push(v);
+      if (values.length >= 2) break;
+    }
+
+    if (values.length < 2) {
+      // Only one valid value — return it with itself as "previous"
+      const single = values[0];
+      return { latest: single, previous: single };
+    }
+
+    return { latest: values[0], previous: values[1] };
   } catch {
     return null;
   }
@@ -148,25 +183,22 @@ async function fetchFredSeries(seriesId: string): Promise<number | null> {
 
 async function fetchFred(): Promise<Record<string, SignalValue>> {
   const signals: Record<string, SignalValue> = {};
-
-  const fredSignals = Object.values(SIGNAL_REGISTRY).filter(
-    (s) => s.source === "fred"
-  );
+  const fredSignals = Object.values(SIGNAL_REGISTRY).filter((s) => s.source === "fred");
 
   const results = await Promise.all(
     fredSignals.map(async (def) => {
-      const val = await fetchFredSeries(def.sourceId);
-      return { id: def.id, val };
+      const pair = await fetchFredSeries(def.sourceId);
+      return { id: def.id, pair };
     })
   );
 
-  for (const { id, val } of results) {
-    if (val != null) {
-      const format =
-        id.includes("YIELD") || id.includes("RATE")
-          ? `${val.toFixed(2)}%`
-          : val.toFixed(2);
-      signals[id] = valueSignal(id, val, format);
+  for (const { id, pair } of results) {
+    if (pair) {
+      const isYieldOrRate = id.includes("YIELD") || id.includes("RATE");
+      const format = isYieldOrRate ? `${pair.latest.toFixed(2)}%` : pair.latest.toFixed(2);
+      const { direction, context } = deriveDirection(pair.latest, pair.previous);
+
+      signals[id] = valueSignal(id, pair.latest, format, direction, context);
     }
   }
 
@@ -174,17 +206,10 @@ async function fetchFred(): Promise<Record<string, SignalValue>> {
 }
 
 // ——— Farside ———
-// Free BTC ETF flow data. Endpoint structure documented by Farside.
 
 interface FarsideFlow {
   date?: string;
   total?: number;
-  btc_price?: number;
-  ibit?: number;
-  fbtc?: number;
-  gbtc?: number;
-  ark?: number;
-  bitb?: number;
 }
 
 async function fetchFarside(): Promise<Record<string, SignalValue>> {
@@ -194,23 +219,27 @@ async function fetchFarside(): Promise<Record<string, SignalValue>> {
 
   try {
     const data: FarsideFlow[] = await res.json();
-    if (!Array.isArray(data) || data.length === 0) return signals;
+    if (!Array.isArray(data) || data.length < 2) return signals;
 
-    // Latest day's flow
     const today = data[data.length - 1];
+    const yesterday = data[data.length - 2];
+
     if (today?.total != null) {
       const flow = today.total;
-      const fmt = flow >= 0 ? `+$${flow.toFixed(0)}M` : `-$${Math.abs(flow).toFixed(0)}M`;
-      signals.BTC_ETF_FLOW = valueSignal("BTC_ETF_FLOW", flow, fmt);
+      const prevFlow = yesterday?.total ?? 0;
+      const dir: SignalDirection =
+        flow > 50 ? "rising" : flow < -50 ? "falling" : "stable";
+      const directionContext =
+        prevFlow !== 0
+          ? `${flow > prevFlow ? "↑" : flow < prevFlow ? "↓" : "→"} prior day: ${prevFlow >= 0 ? "+" : ""}$${prevFlow.toFixed(0)}M`
+          : "Prior day data unavailable";
 
-      // Also compute weekly flow
+      // Weekly
       const last7 = data.slice(-7);
       const weekFlow = last7.reduce((sum: number, d: FarsideFlow) => sum + (d.total ?? 0), 0);
-      signals.BTC_ETF_FLOW = valueSignal(
-        "BTC_ETF_FLOW",
-        flow,
-        `${fmt} (week: ${weekFlow >= 0 ? "+" : "-"}$${Math.abs(weekFlow).toFixed(0)}M)`
-      );
+
+      const fmt = `${flow >= 0 ? "+" : ""}$${flow.toFixed(0)}M (5d: ${weekFlow >= 0 ? "+" : ""}$${weekFlow.toFixed(0)}M)`;
+      signals.BTC_ETF_FLOW = valueSignal("BTC_ETF_FLOW", flow, fmt, dir, directionContext);
     }
   } catch {
     // silent
@@ -228,9 +257,7 @@ export async function fetchNewsHeadlines(
   if (!apiKey) return [];
 
   const res = await safeFetch(
-    `https://newsapi.org/v2/everything?q=${encodeURIComponent(
-      query
-    )}&sortBy=publishedAt&pageSize=8&language=en`,
+    `https://newsapi.org/v2/everything?q=${encodeURIComponent(query)}&sortBy=publishedAt&pageSize=8&language=en`,
     { headers: { "X-Api-Key": apiKey } }
   );
   if (!res) return [];
@@ -258,32 +285,24 @@ export async function fetchAllMarketData(): Promise<MarketSnapshot> {
     fetchFarside().catch(() => emptySignals),
   ]);
 
-  // Merge all signal sources
   const signals: Record<string, SignalValue> = {};
-
-  // Fill all registered signals with nulls first
   for (const id of Object.keys(SIGNAL_REGISTRY)) {
     signals[id] = nullSignal(id);
   }
 
-  // Override with actual data
   for (const source of [cg, fred, farside]) {
     for (const [id, val] of Object.entries(source) as [string, SignalValue][]) {
-      if (val.available) {
-        signals[id] = val;
-      }
+      if (val.available) signals[id] = val;
     }
   }
+
+  // News is a special case — populate if headlines exist (handled in API route)
+  // Don't pre-populate here since headlines are fetched separately
 
   const totalCount = Object.keys(SIGNAL_REGISTRY).length;
   const availableCount = Object.values(signals).filter((s) => s.available).length;
 
-  return {
-    timestamp: Date.now(),
-    signals,
-    availableCount,
-    totalCount,
-  };
+  return { timestamp: Date.now(), signals, availableCount, totalCount };
 }
 
 // ——— Prompt formatting ———
@@ -294,37 +313,41 @@ export function formatMarketContextForPrompt(
 ): string {
   const parts: string[] = [];
 
-  // Signal summary
-  parts.push(
-    `## SIGNAL COVERAGE: ${snapshot.availableCount}/${snapshot.totalCount} data signals available\n`
-  );
-
   const available = Object.values(snapshot.signals).filter((s) => s.available);
+  const unavailable = Object.values(snapshot.signals).filter((s) => !s.available);
+
+  parts.push(
+    `## DATA SIGNALS: ${snapshot.availableCount}/${snapshot.totalCount} available\n`
+  );
+
   if (available.length > 0) {
-    parts.push("### Available Data:");
+    parts.push("### Available:");
     for (const s of available) {
-      parts.push(`- ${s.label}: ${s.value}`);
+      let line = `- ${s.label}: ${s.value}`;
+      if (s.direction) {
+        const arrow = s.direction === "rising" ? "▲" : s.direction === "falling" ? "▼" : "—";
+        line += ` [${arrow}]`;
+      }
+      if (s.directionContext) line += ` (${s.directionContext})`;
+      parts.push(line);
     }
   }
 
-  const unavailable = Object.values(snapshot.signals).filter(
-    (s) => !s.available
-  );
   if (unavailable.length > 0) {
-    parts.push("\n### Missing Data:");
+    parts.push("\n### Unavailable:");
     for (const s of unavailable) {
-      parts.push(`- ${s.label}: UNAVAILABLE`);
+      parts.push(`- ${s.label}: N/A`);
     }
   }
 
   parts.push(
-    "\nIMPORTANT: Use the ABOVE real-time data as ground truth. When a signal is unavailable, acknowledge the gap — do not invent numbers. Narratives that depend on missing signals should be assessed with lower confidence."
+    "\n⚠️ CRITICAL: Indicators shown in the output MUST come from the signals listed above. Do NOT use a signal as evidence for a narrative it doesn't belong to. For example, BTC_PRICE is NOT evidence of institutional buying — only ETF flow is. Each narrative's valid signals are specified in the narrative framework above."
   );
 
   // News
   if (headlines.length > 0) {
     parts.push(
-      "\n## LATEST MARKET NEWS\n" +
+      "\n## MARKET NEWS\n" +
         headlines
           .map(
             (h, i) =>

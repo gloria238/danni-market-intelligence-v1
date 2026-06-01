@@ -1,44 +1,68 @@
 // Narrative Registry — the product's knowledge base.
 //
-// A Narrative = human-interpretable story + required signals.
-// Signals are the atomic data layer (see lib/signals.ts).
-// Coverage is computed from (available signals / required signals) per narrative.
+// Layer 2 of the reasoning stack:
+//   SIGNALS → NARRATIVES → MEMO
+//
+// Each narrative defines two tiers of signals:
+//   required  — ALL must be present. Missing ANY → "Not Assessable".
+//   enhancing — nice-to-have. More = richer analysis, but not gating.
+//
+// Directional logic: each narrative explains what signal direction
+// pattern supports it (e.g. "DXY ↓ + Gold ↑ → USD Weakness narrative").
 
-import { type SignalValue, assessCoverage, type CoverageLevel } from "@/lib/signals";
+import {
+  type SignalValue,
+  type CoverageLevel,
+  type SignalDirection,
+} from "@/lib/signals";
+import { assessCoverage } from "@/lib/signals";
+
+/* ——— Narrative definition ——— */
 
 export interface NarrativeDef {
   id: string;
   name: string;
   description: string;
+  /** Interpretive framework for the LLM */
   promptContext: string;
-  /** Signal IDs that MUST be available for this narrative to be well-supported */
+  /** Directional logic: what signal pattern supports this narrative */
+  directionalLogic: string;
+  /** Hard gate — ALL must be present. Missing ANY → Not Assessable. */
   requiredSignals: string[];
+  /** Nice-to-have — enrich analysis but don't gate the narrative */
+  enhancingSignals: string[];
 }
 
 export interface NarrativeAssessment {
   id: string;
   name: string;
   coverage: CoverageLevel;
-  /** Ratio — how many required signals are available */
-  coverageRatio: number;
-  /** Matched signal values */
+  /** How many required signals are present / total required */
+  requiredStatus: { available: number; total: number };
+  /** Enhancing signals available */
+  enhancingAvailable: number;
+  enhancingTotal: number;
+  /** Actual signal values */
   availableSignals: SignalValue[];
   /** Signal IDs that are missing */
-  missingSignals: string[];
-  /** LLM-provided reasoning text */
-  reasoning: string;
-  /** LLM-provided confidence (now subordinated to coverage) */
-  confidence: "High" | "Medium" | "Low";
+  missingRequired: string[];
+  /** Description of why this narrative is relevant given current signals */
+  directionalContext: string;
 }
+
+/* ——— All Narratives ——— */
 
 export const NARRATIVE_REGISTRY: Record<string, NarrativeDef> = {
   ETF_FLOW: {
     id: "ETF_FLOW",
     name: "ETF Flows",
-    description: "Capital flows through spot Bitcoin/ETH ETFs driving price action",
+    description: "Capital flows through spot Bitcoin ETFs driving price action",
     promptContext:
-      "ETF flows are the most transparent institutional demand signal. Inflows > $100M/day are unambiguously bullish; sustained outflows signal risk-off positioning.",
-    requiredSignals: ["BTC_ETF_FLOW", "BTC_PRICE", "BTC_24H_CHANGE"],
+      "ETF flows are the most transparent institutional demand signal. Daily inflows > $100M indicate strong buying pressure. Weekly trends matter more than single-day prints.",
+    directionalLogic:
+      "BTC ETF Flow is the decisive signal. Positive flow → institutional demand. Negative flow → risk-off. Direction matters more than absolute magnitude.",
+    requiredSignals: ["BTC_ETF_FLOW"],
+    enhancingSignals: ["BTC_PRICE", "BTC_24H_CHANGE"],
   },
 
   RATE_CUT_EXPECTATIONS: {
@@ -46,8 +70,11 @@ export const NARRATIVE_REGISTRY: Record<string, NarrativeDef> = {
     name: "Rate Cut Expectations",
     description: "Market pricing increased probability of central bank rate cuts",
     promptContext:
-      "When short-term yields fall faster than long-term (bull steepening), markets are pricing rate cuts. Falling US2Y + rising Fed funds futures probability = dovish pivot expected.",
-    requiredSignals: ["US2Y_YIELD", "US10Y_YIELD", "FED_FUNDS_RATE", "DXY_INDEX"],
+      "When short-end yields fall faster than long-end (bull steepening), bond markets are pricing imminent cuts. Fed funds rate level + US2Y direction are the primary signals.",
+    directionalLogic:
+      "US2Y ↓ + Fed Funds ≤ current → easing priced in. US2Y ↑ + Fed Funds stable → no cuts expected. US10Y direction provides growth/inflation context.",
+    requiredSignals: ["US2Y_YIELD", "US10Y_YIELD", "FED_FUNDS_RATE"],
+    enhancingSignals: ["DXY_INDEX", "BTC_PRICE"],
   },
 
   USD_WEAKNESS: {
@@ -55,44 +82,11 @@ export const NARRATIVE_REGISTRY: Record<string, NarrativeDef> = {
     name: "USD Weakness",
     description: "Declining US Dollar index boosting dollar-denominated assets",
     promptContext:
-      "A weak USD benefits Bitcoin, gold, and EM assets. DXY < 100 is structurally weak. Track DXY direction + gold correlation.",
-    requiredSignals: ["DXY_INDEX", "GOLD_PRICE", "BTC_PRICE"],
-  },
-
-  RISK_ON_SENTIMENT: {
-    id: "RISK_ON_SENTIMENT",
-    name: "Risk-On Sentiment",
-    description: "Broad shift toward risk assets — equities up, yields up, USD down",
-    promptContext:
-      "When BTC correlates positively with SPX and negatively with DXY, it's trading like a risk asset. Falling VIX + rising equities signal risk appetite.",
-    requiredSignals: ["DXY_INDEX", "US10Y_YIELD", "BTC_PRICE"],
-  },
-
-  SHORT_SQUEEZE: {
-    id: "SHORT_SQUEEZE",
-    name: "Short Squeeze",
-    description: "Rapid price increase forcing short sellers to cover",
-    promptContext:
-      "Short squeezes are unsustainable by nature. Key signatures: negative funding → rapid price spike → liquidations cascade. Typically resolves within 24-72 hours.",
-    requiredSignals: ["BTC_PRICE", "BTC_24H_CHANGE"],
-  },
-
-  INSTITUTIONAL_BUYING: {
-    id: "INSTITUTIONAL_BUYING",
-    name: "Institutional Buying",
-    description: "Large institutions accumulating spot or ETF positions",
-    promptContext:
-      "Institutional flow is 'sticky money' — unlike leverage, it doesn't unwind overnight. ETF inflows + strong BTC price action = likely institutional accumulation.",
-    requiredSignals: ["BTC_ETF_FLOW", "BTC_PRICE", "BTC_24H_CHANGE"],
-  },
-
-  REGULATORY_RELIEF: {
-    id: "REGULATORY_RELIEF",
-    name: "Regulatory Relief",
-    description: "Positive regulatory developments reducing policy uncertainty",
-    promptContext:
-      "Regulatory clarity reduces the 'policy risk premium' in crypto. Track SEC statements, court rulings, and legislative progress. This is primarily news-driven.",
-    requiredSignals: ["MARKET_NEWS", "BTC_PRICE"],
+      "DXY is the USD strength gauge. DXY ↓ → USD cheaper globally → risk assets benefit. Gold ↑ concurrent with DXY ↓ confirms the dollar-weakness thesis (not just risk-on).",
+    directionalLogic:
+      "DXY ↓ = dollar weakening. Gold ↑ + DXY ↓ = confirmed dollar weakness (gold is the purest dollar alternative). DXY < 100 is structurally weak territory.",
+    requiredSignals: ["DXY_INDEX"],
+    enhancingSignals: ["GOLD_PRICE", "BTC_PRICE", "US10Y_YIELD"],
   },
 
   MACRO_EASING: {
@@ -100,30 +94,75 @@ export const NARRATIVE_REGISTRY: Record<string, NarrativeDef> = {
     name: "Macro Easing",
     description: "Central bank liquidity expansion boosting all financial assets",
     promptContext:
-      "Declining Fed funds rate + falling yields + weak USD = macro easing regime. This is historically the most bullish backdrop for Bitcoin.",
-    requiredSignals: ["FED_FUNDS_RATE", "US10Y_YIELD", "DXY_INDEX", "GOLD_PRICE"],
+      "Declining Fed funds rate + falling yields across the curve + weak USD = unambiguous macro easing. This is historically the most bullish backdrop for Bitcoin and gold.",
+    directionalLogic:
+      "Fed Funds ↓ or steady-low + US10Y ↓ + DXY ↓ → easing regime. All three pointing in same direction = high-conviction signal. Mixed directions = transition phase, lower conviction.",
+    requiredSignals: ["FED_FUNDS_RATE", "US10Y_YIELD", "DXY_INDEX"],
+    enhancingSignals: ["GOLD_PRICE", "US2Y_YIELD", "BTC_PRICE"],
+  },
+
+  INSTITUTIONAL_BUYING: {
+    id: "INSTITUTIONAL_BUYING",
+    name: "Institutional Buying",
+    description: "Large institutions accumulating spot or ETF positions",
+    promptContext:
+      "Institutional flow is 'sticky money' — unlike leverage, it doesn't unwind overnight. ETF inflows are the primary observable signal. Price action alone is NOT evidence of institutional buying.",
+    directionalLogic:
+      "BTC ETF Flow positive + sustained > 3 days → institutional accumulation. BTC price direction provides context but is NOT direct evidence — any buyer can move price. ETF flow is the institutional fingerprint.",
+    requiredSignals: ["BTC_ETF_FLOW"],
+    enhancingSignals: ["BTC_PRICE", "BTC_24H_CHANGE"],
+  },
+
+  REGULATORY_RELIEF: {
+    id: "REGULATORY_RELIEF",
+    name: "Regulatory Relief",
+    description: "Positive regulatory developments reducing policy uncertainty",
+    promptContext:
+      "Regulatory clarity reduces the 'policy risk premium' in crypto. This narrative is primarily news-driven — headlines about SEC, legislation, or court rulings are the direct evidence.",
+    directionalLogic:
+      "Positive regulatory headlines + BTC price response → regulatory relief narrative. BTC price alone is never evidence of regulatory developments.",
+    requiredSignals: ["MARKET_NEWS"],
+    enhancingSignals: ["BTC_PRICE"],
   },
 
   TECHNICAL_BREAKOUT: {
     id: "TECHNICAL_BREAKOUT",
     name: "Technical Breakout",
-    description: "Price breaking through key technical levels",
+    description: "Price breaking through key technical levels triggering momentum buying",
     promptContext:
-      "Breakouts need volume confirmation. A breakout on declining volume is a false signal. Track price action relative to recent range.",
+      "Price breakouts need magnitude confirmation. A move < 2% is noise, not a breakout. 24h change > 5% with sustained direction = possible breakout. Without volume data, caution is warranted.",
+    directionalLogic:
+      "BTC 24h change magnitude > 3% + consistent direction → potential breakout. Price direction + change magnitude are the only available signals; flag the absence of volume confirmation.",
     requiredSignals: ["BTC_PRICE", "BTC_24H_CHANGE"],
+    enhancingSignals: [],
   },
 
   GEOPOLITICAL_SAFE_HAVEN: {
     id: "GEOPOLITICAL_SAFE_HAVEN",
     name: "Geopolitical Safe Haven",
-    description: "Geopolitical tensions driving demand for decentralized assets",
+    description: "Geopolitical tensions driving demand for decentralized and hard assets",
     promptContext:
-      "In geopolitical crises, Bitcoin sometimes trades as non-sovereign money alongside gold. Gold + BTC rising together with DXY also rising suggests safe-haven bid, not risk appetite.",
-    requiredSignals: ["GOLD_PRICE", "BTC_PRICE", "DXY_INDEX", "MARKET_NEWS"],
+      "Safe-haven bid signature: Gold ↑ + BTC ↑ + DXY also ↑ (flight to safety, not risk appetite). If DXY is falling while gold/BTC rise, that's dollar-weakness narrative, not geopolitical.",
+    directionalLogic:
+      "Gold ↑ + BTC ↑ + DXY stable/↑ = safe haven bid (capital fleeing to hard/decentralized assets). Gold ↑ + BTC ↑ + DXY ↓ = dollar weakness, not geopolitics. The DXY direction distinguishes these two narratives.",
+    requiredSignals: ["GOLD_PRICE", "DXY_INDEX"],
+    enhancingSignals: ["BTC_PRICE", "MARKET_NEWS"],
+  },
+
+  SHORT_SQUEEZE: {
+    id: "SHORT_SQUEEZE",
+    name: "Short Squeeze",
+    description: "Forced short covering amplifying a price move",
+    promptContext:
+      "Short squeezes require: rapid price spike + evidence of prior short positioning. Without funding rate, OI, or liquidation data, this narrative CANNOT be assessed. Do NOT infer a short squeeze from price action alone — that is speculation.",
+    directionalLogic:
+      "Without funding rate, open interest, or liquidation data, this narrative is structurally Not Assessable. Price action alone is never sufficient — every price move would 'look like' a squeeze.",
+    requiredSignals: ["BTC_PRICE"],
+    enhancingSignals: ["BTC_24H_CHANGE"],
   },
 };
 
-/* ——— Coverage Assessment ——— */
+/* ——— Hard-gate coverage assessment ——— */
 
 export function assessNarrative(
   narrativeId: string,
@@ -132,56 +171,94 @@ export function assessNarrative(
   const def = NARRATIVE_REGISTRY[narrativeId];
   if (!def) return null;
 
-  const availableSignals: SignalValue[] = [];
-  const missingSignals: string[] = [];
+  const availableRequired: SignalValue[] = [];
+  const missingRequired: string[] = [];
 
   for (const sigId of def.requiredSignals) {
-    const sigVal = signals[sigId];
-    if (sigVal?.available) {
-      availableSignals.push(sigVal);
+    const sv = signals[sigId];
+    if (sv?.available) {
+      availableRequired.push(sv);
     } else {
-      missingSignals.push(sigId);
+      missingRequired.push(sigId);
     }
   }
 
-  const coverageRatio = def.requiredSignals.length > 0
-    ? availableSignals.length / def.requiredSignals.length
-    : 0;
-  const coverage = assessCoverage(availableSignals.length, def.requiredSignals.length);
+  const enhancingAvailable = def.enhancingSignals.filter(
+    (id) => signals[id]?.available
+  ).length;
+
+  const coverage = assessCoverage(
+    availableRequired.length,
+    def.requiredSignals.length
+  );
+
+  // All available signals for this narrative (required + enhancing that exist)
+  const allAvailable = [
+    ...availableRequired,
+    ...def.enhancingSignals
+      .filter((id) => signals[id]?.available)
+      .map((id) => signals[id]),
+  ];
+
+  // Build directional context from signal patterns
+  const directionalContext = buildDirectionalContext(def, signals);
 
   return {
     id: def.id,
     name: def.name,
     coverage,
-    coverageRatio,
-    availableSignals,
-    missingSignals,
-    reasoning: "",
-    confidence: coverage === "Strongly Supported" ? "High" : coverage === "Partially Supported" ? "Medium" : "Low",
+    requiredStatus: {
+      available: availableRequired.length,
+      total: def.requiredSignals.length,
+    },
+    enhancingAvailable,
+    enhancingTotal: def.enhancingSignals.length,
+    availableSignals: allAvailable,
+    missingRequired,
+    directionalContext,
   };
+}
+
+function buildDirectionalContext(
+  def: NarrativeDef,
+  signals: Record<string, SignalValue>
+): string {
+  const parts: string[] = [];
+
+  for (const sigId of [...def.requiredSignals, ...def.enhancingSignals]) {
+    const sv = signals[sigId];
+    if (!sv?.available || !sv.direction) continue;
+
+    const arrow =
+      sv.direction === "rising" ? "↑" : sv.direction === "falling" ? "↓" : "→";
+    parts.push(`${sv.label} ${arrow} at ${sv.value}`);
+    if (sv.directionContext) parts.push(`  ${sv.directionContext}`);
+  }
+
+  return parts.length > 0 ? parts.join("\n") : "No directional data available.";
 }
 
 export function buildNarrativeCoverageTable(
   signals: Record<string, SignalValue>
 ): {
-  supported: NarrativeAssessment[];
-  partial: NarrativeAssessment[];
-  insufficient: NarrativeAssessment[];
+  assessable: NarrativeAssessment[];
+  notAssessable: NarrativeAssessment[];
 } {
-  const supported: NarrativeAssessment[] = [];
-  const partial: NarrativeAssessment[] = [];
-  const insufficient: NarrativeAssessment[] = [];
+  const assessable: NarrativeAssessment[] = [];
+  const notAssessable: NarrativeAssessment[] = [];
 
   for (const id of Object.keys(NARRATIVE_REGISTRY)) {
     const assessment = assessNarrative(id, signals);
     if (!assessment) continue;
 
-    if (assessment.coverage === "Strongly Supported") supported.push(assessment);
-    else if (assessment.coverage === "Partially Supported") partial.push(assessment);
-    else insufficient.push(assessment);
+    if (assessment.coverage === "Assessable") {
+      assessable.push(assessment);
+    } else {
+      notAssessable.push(assessment);
+    }
   }
 
-  return { supported, partial, insufficient };
+  return { assessable, notAssessable };
 }
 
 /* ——— Prompt formatting ——— */
@@ -189,40 +266,45 @@ export function buildNarrativeCoverageTable(
 export function formatNarrativesForPrompt(
   signals: Record<string, SignalValue>
 ): string {
-  const { supported, partial, insufficient } = buildNarrativeCoverageTable(signals);
+  const { assessable, notAssessable } = buildNarrativeCoverageTable(signals);
 
   let block = "";
 
-  if (supported.length > 0) {
-    block += "## STRONGLY SUPPORTED NARRATIVES (prioritize these)\n";
-    for (const a of supported) {
+  if (assessable.length > 0) {
+    block +=
+      "## ASSESSABLE NARRATIVES (all required signals present — use these)\n\n";
+    for (const a of assessable) {
       const def = NARRATIVE_REGISTRY[a.id];
-      block += `- ${a.id}: ${def.description} (${a.availableSignals.length}/${def.requiredSignals.length} signals available)\n  ${def.promptContext}\n`;
-    }
-    block += "\n";
-  }
-
-  if (partial.length > 0) {
-    block += "## PARTIALLY SUPPORTED NARRATIVES (use cautiously — data gaps exist)\n";
-    for (const a of partial) {
-      const def = NARRATIVE_REGISTRY[a.id];
-      block += `- ${a.id}: ${def.description} (${a.availableSignals.length}/${def.requiredSignals.length} signals available, missing: ${a.missingSignals.join(", ")})\n  ${def.promptContext}\n`;
-    }
-    block += "\n";
-  }
-
-  if (insufficient.length > 0) {
-    block += "## INSUFFICIENT DATA NARRATIVES (DO NOT USE — no supporting data)\n";
-    for (const a of insufficient) {
-      const def = NARRATIVE_REGISTRY[a.id];
-      block += `- ${a.id}: ${def.description} (${a.availableSignals.length}/${def.requiredSignals.length} signals available)\n  DO NOT include this narrative. Required signals unavailable.\n`;
+      const enhancingInfo =
+        def.enhancingSignals.length > 0
+          ? ` [enhancing: ${a.enhancingAvailable}/${a.enhancingTotal}]`
+          : "";
+      block += `### ${a.id}: ${def.description}${enhancingInfo}\n`;
+      block += `Directional logic: ${def.directionalLogic}\n`;
+      block += `Current signals:\n${a.directionalContext || "  Signal data present but directional context unavailable."}\n`;
+      block += `Context: ${def.promptContext}\n\n`;
     }
   }
 
-  return block || "No narrative data available.";
+  if (notAssessable.length > 0) {
+    block +=
+      "## NOT ASSESSABLE (DO NOT USE — missing required signals)\n\n";
+    for (const a of notAssessable) {
+      const def = NARRATIVE_REGISTRY[a.id];
+      block += `### ${a.id}: ${def.description}\n`;
+      block += `❌ DO NOT USE. Missing required signals: ${a.missingRequired.join(", ")}\n`;
+      if (a.availableSignals.length > 0) {
+        const labels = a.availableSignals.map((s) => s.label).join(", ");
+        block += `Available but insufficient: ${labels}\n`;
+      }
+      block += `\n`;
+    }
+  }
+
+  return block || "No narrative framework available.";
 }
 
-// Manual backward compat
+// Backward compat
 export function resolveNarrative(id: string): NarrativeDef | undefined {
   const normalized = id.toUpperCase().replace(/\s+/g, "_");
   return NARRATIVE_REGISTRY[normalized] || NARRATIVE_REGISTRY[id];

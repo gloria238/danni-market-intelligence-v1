@@ -34,11 +34,13 @@ export interface MarketContext {
 
 // ——— Helpers ———
 
-const FETCH_TIMEOUT = 8000;
+const DEFAULT_TIMEOUT = 8000;
 
-async function safeFetch(url: string, opts: RequestInit = {}): Promise<Response | null> {
+async function safeFetch(url: string, timeoutOrOpts?: number | RequestInit, maybeOpts?: RequestInit): Promise<Response | null> {
+  const timeoutMs = typeof timeoutOrOpts === "number" ? timeoutOrOpts : DEFAULT_TIMEOUT;
+  const opts: RequestInit = typeof timeoutOrOpts === "object" ? timeoutOrOpts : (maybeOpts ?? {});
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(url, { ...opts, signal: controller.signal });
     return res.ok ? res : null;
@@ -165,7 +167,8 @@ async function fetchFredSeries(seriesId: string): Promise<{ latest: number; prev
   }
 
   const res = await safeFetch(
-    `https://api.stlouisfed.org/fred/series/observations?series_id=${seriesId}&api_key=${apiKey}&file_type=json&limit=30&sort_order=desc`
+    `https://api.stlouisfed.org/fred/series/observations?series_id=${seriesId}&api_key=${apiKey}&file_type=json&limit=30&sort_order=desc`,
+    15000 // FRED is slow from Vercel's IP — needs > 8s
   );
   if (!res) {
     console.warn(`[fred] ${seriesId} — fetch failed or timed out`);

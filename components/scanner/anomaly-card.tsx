@@ -7,6 +7,7 @@ import Link from "next/link";
 import type { SignalDirection } from "@/lib/signals";
 import type { PatternMatchResult } from "@/lib/patterns";
 import type { EvidenceStrength } from "@/lib/evidence";
+import { useLocale } from "@/lib/i18n";
 
 export interface AnomalyCardData {
   id: string;
@@ -45,6 +46,7 @@ function EvidenceBadge({ strength }: { strength: EvidenceStrength }) {
 }
 
 export function AnomalyCard({ data }: { data: AnomalyCardData }) {
+  const { t } = useLocale();
   const score = data.severityScore;
   const label = severityLabel(score);
   const aA = data.signalA.direction === "rising" ? "↑" : data.signalA.direction === "falling" ? "↓" : "→";
@@ -76,9 +78,9 @@ export function AnomalyCard({ data }: { data: AnomalyCardData }) {
         {/* Directional summary */}
         <div className="flex items-center gap-2 text-xs rounded-lg bg-surface px-3 py-2">
           <span className="font-mono text-foreground">{data.signalA.label} {aA}</span>
-          <span className="text-muted">normally →</span>
+          <span className="text-muted">{t("card.normally")}</span>
           <span className="font-mono text-foreground">{data.signalB.label} {data.type === "divergence" ? (aA === "↑" ? "↓" : aA === "↓" ? "↑" : aA) : aA}</span>
-          <span className="text-muted">but</span>
+          <span className="text-muted">{t("card.but")}</span>
           <span className="font-mono text-foreground">{data.signalB.label} {bA}</span>
         </div>
 
@@ -87,9 +89,9 @@ export function AnomalyCard({ data }: { data: AnomalyCardData }) {
           <div className="space-y-1">
             <div className="flex items-center justify-between text-[10px] text-muted">
               <span className="font-medium">
-                {data.historicalMatch.occurrences} past cases · {data.historicalMatch.bullishResolution}% bullish · avg {data.historicalMatch.avgBtcMove >= 0 ? "+" : ""}{data.historicalMatch.avgBtcMove}% BTC
+                {data.historicalMatch.occurrences} {t("card.past_cases")} · {data.historicalMatch.bullishResolution}% {t("card.bullish")} · {t("card.avg")} {data.historicalMatch.avgBtcMove >= 0 ? "+" : ""}{data.historicalMatch.avgBtcMove}% BTC
               </span>
-              <span>~{data.historicalMatch.medianResolutionDays}d resolve</span>
+              <span>~{data.historicalMatch.medianResolutionDays}d {t("card.resolve")}</span>
             </div>
             <div className="flex h-1.5 rounded-full overflow-hidden bg-border">
               <div
@@ -120,7 +122,7 @@ export function AnomalyCard({ data }: { data: AnomalyCardData }) {
           <div className="flex items-center gap-2 text-[10px] text-muted">
             {data.unexplainedMove != null && (
               <span className="bg-danger-subtle text-danger rounded px-1.5 py-0.5 font-mono border border-danger/10">
-                {data.unexplainedMove >= 0 ? "+" : ""}{data.unexplainedMove.toFixed(1)}% unexplained
+                {data.unexplainedMove >= 0 ? "+" : ""}{data.unexplainedMove.toFixed(1)}% {t("card.unexplained")}
               </span>
             )}
             {/* V5: Evidence one-liner */}
@@ -132,11 +134,11 @@ export function AnomalyCard({ data }: { data: AnomalyCardData }) {
               </span>
             )}
             {!data.evidenceLabel && data.resolutionSignal && (
-              <span>Resolve: {data.resolutionSignal}</span>
+              <span>{t("card.resolve_signal")}: {data.resolutionSignal}</span>
             )}
           </div>
           <span className="inline-flex items-center gap-1 text-[11px] text-accent font-medium group-hover:underline">
-            Deep Dive <ArrowRight className="h-3 w-3" />
+            {t("card.deep_dive")} <ArrowRight className="h-3 w-3" />
           </span>
         </div>
       </div>

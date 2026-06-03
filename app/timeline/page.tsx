@@ -1,64 +1,79 @@
 // V5.5: Research Timeline — chronological market event visualization.
-//
-// Stitches signal_history + divergence_observations into a single
-// vertical timeline with color-coded event markers.
-// Pure data visualization — no LLM.
 
+"use client";
+
+import { useEffect, useState } from "react";
 import { getTimeline, type TimelineEvent } from "@/lib/timeline";
 import { EXPECTATION_REGISTRY } from "@/lib/expectations";
 import {
   TrendingUp, TrendingDown, AlertTriangle, CheckCircle2,
-  ArrowUpRight, ArrowDownRight, Minus, Clock, Filter,
+  ArrowUpRight, ArrowDownRight, Minus, Clock, Filter, Loader2,
 } from "lucide-react";
 import Link from "next/link";
-import { createServerSupabase } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
+import { useLocale } from "@/lib/i18n";
+import { LocaleToggle } from "@/components/locale-toggle";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+function getUrlParams() {
+  if (typeof window === "undefined") return {};
+  return Object.fromEntries(new URLSearchParams(window.location.search));
+}
 
-export default async function TimelinePage({
-  searchParams,
-}: {
-  searchParams: Promise<{ from?: string; to?: string; pair?: string }>;
-}) {
-  const supabase = await createServerSupabase();
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) redirect("/login?redirect=/timeline");
+export default function TimelinePage() {
+  const { t } = useLocale();
+  const [timeline, setTimeline] = useState<{ events: TimelineEvent[]; totalEvents: number } | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
+  const router = useRouter();
 
-  const params = await searchParams;
+  const params = typeof window !== "undefined" ? getUrlParams() : {};
   const defaultFrom = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
   const defaultTo = new Date().toISOString().slice(0, 10);
+  const from = (params as any).from || defaultFrom;
+  const to = (params as any).to || defaultTo;
+  const pair = (params as any).pair || undefined;
 
-  const from = params.from || defaultFrom;
-  const to = params.to || defaultTo;
-  const pair = params.pair;
+  useEffect(() => {
+    const c = createClient();
+    c.auth.getSession().then(({ data }) => {
+      if (!data.session) router.push("/login?redirect=/timeline");
+      else setAuthChecked(true);
+    });
+  }, [router]);
 
-  const timeline = await getTimeline(supabase, from, to, pair);
+  useEffect(() => {
+    if (!authChecked) return;
+    const supabase = createClient();
+    getTimeline(supabase as any, from, to, pair).then((result) => {
+      setTimeline(result);
+      setLoaded(true);
+    });
+  }, [authChecked, from, to, pair]);
+
+  if (!authChecked || !loaded || !timeline) {
+    return <div className="flex min-h-screen items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted"/></div>;
+  }
 
   return (
     <div className="flex min-h-screen flex-col">
       <div className="mx-auto w-full max-w-2xl px-4 py-8 space-y-8">
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Research Timeline</h1>
+            <h1 className="text-2xl font-bold tracking-tight">{t("timeline.title")}</h1>
             <p className="text-sm text-foreground-secondary mt-1">
-              {from} → {to} · {timeline.totalEvents} events
+              {from} → {to} · {timeline.totalEvents} {t("timeline.events")}
             </p>
           </div>
-          <Link
-            href="/divergences"
-            className="text-xs text-muted hover:text-foreground-secondary transition-colors"
-          >
-            ← Back to Scanner
-          </Link>
+          <div className="flex items-center gap-3">
+            <LocaleToggle />
+            <Link href="/divergences" className="text-xs text-muted hover:text-foreground-secondary transition-colors">{t("timeline.back")}</Link>
+          </div>
         </div>
 
-        {/* Filters */}
         <form className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-1.5">
-            <label className="text-[10px] text-muted uppercase tracking-wider">From</label>
+            <label className="text-[10px] text-muted uppercase tracking-wider">{t("timeline.from")}</label>
             <input
               type="date"
               name="from"
@@ -67,7 +82,7 @@ export default async function TimelinePage({
             />
           </div>
           <div className="flex items-center gap-1.5">
-            <label className="text-[10px] text-muted uppercase tracking-wider">To</label>
+            <label className="text-[10px] text-muted uppercase tracking-wider">{t("timeline.to")}</label>
             <input
               type="date"
               name="to"
@@ -80,21 +95,17 @@ export default async function TimelinePage({
               <Filter className="h-3 w-3 text-muted" />
               <span className="text-xs text-foreground-secondary font-mono">{pair}</span>
               <Link href="/timeline" className="text-[10px] text-muted hover:text-danger transition-colors">
-                ✕ clear
+                ✕ {t("timeline.clear")}
               </Link>
             </div>
           )}
-          <button
-            type="submit"
-            className="rounded-lg bg-accent text-white px-3 py-1.5 text-xs font-semibold hover:bg-accent-hover transition-colors"
-          >
-            Apply
+          <button type="submit" className="rounded-lg bg-accent text-white px-3 py-1.5 text-xs font-semibold hover:bg-accent-hover transition-colors">
+            {t("timeline.apply")}
           </button>
         </form>
 
-        {/* Signal pair quick filters */}
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[10px] text-muted uppercase tracking-wider">Quick filter:</span>
+          <span className="text-[10px] text-muted uppercase tracking-wider">{t("timeline.quick_filter")}:</span>
           {EXPECTATION_REGISTRY.map((exp) => (
             <Link
               key={exp.id}
@@ -113,10 +124,8 @@ export default async function TimelinePage({
         {timeline.events.length === 0 ? (
           <div className="rounded-xl border border-border bg-surface-elevated p-12 text-center">
             <Clock className="h-8 w-8 text-muted mx-auto mb-4" />
-            <p className="text-sm text-foreground-secondary font-medium">No events found</p>
-            <p className="text-xs text-muted mt-1">
-              Try a wider date range or different signal pair filter. Timeline data accumulates as signal history grows.
-            </p>
+            <p className="text-sm text-foreground-secondary font-medium">{t("timeline.empty_title")}</p>
+            <p className="text-xs text-muted mt-1">{t("timeline.empty_desc")}</p>
           </div>
         ) : (
           <div className="relative">
@@ -124,12 +133,13 @@ export default async function TimelinePage({
             <div className="absolute left-[19px] top-2 bottom-2 w-px bg-border" />
 
             <div className="space-y-0">
-              {timeline.events.map((event, i) => (
+              {timeline.events.map((event: TimelineEvent, i: number) => (
                 <TimelineNode
                   key={event.id}
                   event={event}
                   isFirst={i === 0}
                   isLast={i === timeline.events.length - 1}
+                  t={t}
                 />
               ))}
             </div>
@@ -143,13 +153,12 @@ export default async function TimelinePage({
 /* ——— Timeline Node ——— */
 
 function TimelineNode({
-  event,
-  isFirst,
-  isLast,
+  event, isFirst, isLast, t,
 }: {
   event: TimelineEvent;
   isFirst: boolean;
   isLast: boolean;
+  t: (key: string) => string;
 }) {
   const icon = getEventIcon(event);
   const colors = getEventColors(event);
@@ -168,7 +177,7 @@ function TimelineNode({
         <div className="flex items-center gap-2 mb-1">
           <span className="text-xs text-muted font-mono">{event.date}</span>
           <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase ${colors.badge}`}>
-            {event.type === "signal_move" ? "Signal" : event.type === "divergence" ? "Divergence" : "Resolution"}
+            {event.type === "signal_move" ? t("timeline.signal") : event.type === "divergence" ? t("timeline.divergence") : t("timeline.resolution")}
           </span>
           {event.severity != null && (
             <span className="text-[10px] text-muted font-mono">

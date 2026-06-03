@@ -11,6 +11,8 @@ import { cn } from "@/lib/utils";
 import { AnomalyCard, type AnomalyCardData } from "@/components/scanner/anomaly-card";
 import { severityLabel, severityColor } from "@/lib/ranking";
 import type { ResearchOutput } from "@/lib/ai";
+import { useLocale } from "@/lib/i18n";
+import { LocaleToggle } from "@/components/locale-toggle";
 
 interface ScannerState {
   loading: boolean;
@@ -22,6 +24,7 @@ export default function DivergenceScannerPage() {
   const [state, setState] = useState<ScannerState>({ loading: true, data: null, error: null });
   const [authChecked, setAuthChecked] = useState(false);
   const router = useRouter();
+  const { t } = useLocale();
 
   // Auth check
   useEffect(() => {
@@ -71,14 +74,15 @@ export default function DivergenceScannerPage() {
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-subtle border border-accent/20">
             <Sparkles className="h-4 w-4 text-accent" />
           </div>
-          <span className="font-semibold text-sm tracking-tight">Market Intelligence</span>
+          <span className="font-semibold text-sm tracking-tight">{t("nav.market_intelligence")}</span>
         </div>
         <div className="flex items-center gap-3">
-          <a href="/timeline" className="text-xs text-muted hover:text-foreground-secondary transition-colors">Timeline</a>
-          <a href="/patterns" className="text-xs text-muted hover:text-foreground-secondary transition-colors">Library</a>
-          <a href="/research" className="text-xs text-muted hover:text-foreground-secondary transition-colors">Research Chat</a>
+          <LocaleToggle />
+          <a href="/timeline" className="text-xs text-muted hover:text-foreground-secondary transition-colors">{t("nav.timeline")}</a>
+          <a href="/patterns" className="text-xs text-muted hover:text-foreground-secondary transition-colors">{t("nav.library")}</a>
+          <a href="/research" className="text-xs text-muted hover:text-foreground-secondary transition-colors">{t("nav.research_chat")}</a>
           <button onClick={handleLogout} className="flex items-center gap-1.5 text-xs text-muted hover:text-foreground-secondary transition-colors px-3 py-1.5 rounded-lg hover:bg-surface">
-            <LogOut className="h-3 w-3" />Sign out
+            <LogOut className="h-3 w-3" />{t("nav.sign_out")}
           </button>
         </div>
       </header>
@@ -88,8 +92,8 @@ export default function DivergenceScannerPage() {
           {/* Title */}
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Today&apos;s Market Anomalies</h1>
-              <p className="text-sm text-foreground-secondary mt-1">Cross-signal divergence scanner — automatically detected</p>
+              <h1 className="text-2xl font-bold tracking-tight">{t("scanner.title")}</h1>
+              <p className="text-sm text-foreground-secondary mt-1">{t("scanner.subtitle")}</p>
             </div>
             <button
               onClick={scan}
@@ -97,7 +101,7 @@ export default function DivergenceScannerPage() {
               className="flex items-center gap-2 rounded-xl bg-accent hover:bg-accent-hover text-white px-4 py-2.5 text-sm font-semibold shadow-lg shadow-accent/20 transition-all disabled:opacity-40"
             >
               {state.loading ? <Loader2 className="h-4 w-4 animate-spin"/> : <ArrowUp className="h-4 w-4"/>}
-              {state.loading ? "Scanning..." : "Re-scan"}
+              {state.loading ? t("scanner.scanning_btn") : t("scanner.rescan")}
             </button>
           </div>
 
@@ -105,8 +109,8 @@ export default function DivergenceScannerPage() {
           {state.loading && (
             <div className="flex flex-col items-center justify-center py-32 text-center">
               <Loader2 className="h-8 w-8 animate-spin text-accent mb-4" />
-              <p className="text-sm text-foreground-secondary">Scanning markets for anomalies...</p>
-              <p className="text-xs text-muted mt-1">Fetching signals · Detecting divergences · Computing severity scores</p>
+              <p className="text-sm text-foreground-secondary">{t("scanner.scanning")}</p>
+              <p className="text-xs text-muted mt-1">{t("scanner.fetching")}</p>
             </div>
           )}
 
@@ -115,7 +119,7 @@ export default function DivergenceScannerPage() {
             <div className="rounded-xl border border-danger/20 bg-danger-subtle/20 p-6 text-center">
               <AlertTriangle className="h-6 w-6 text-danger mx-auto mb-2" />
               <p className="text-sm text-danger">{state.error}</p>
-              <button onClick={scan} className="mt-3 text-xs text-accent hover:underline">Retry</button>
+              <button onClick={scan} className="mt-3 text-xs text-accent hover:underline">{t("scanner.retry")}</button>
             </div>
           )}
 
@@ -130,9 +134,9 @@ export default function DivergenceScannerPage() {
                     style={{ width: `${(state.data.signal_coverage.available / state.data.signal_coverage.total) * 100}%` }}
                   />
                 </div>
-                <span className="text-[11px] font-mono text-muted">{state.data.signal_coverage.available}/{state.data.signal_coverage.total} signals</span>
+                <span className="text-[11px] font-mono text-muted">{state.data.signal_coverage.available}/{state.data.signal_coverage.total} {t("scanner.signals")}</span>
                 {state.data.attribution && state.data.attribution.unexplainedRatio > 0.8 && (
-                  <span className="text-[10px] text-danger bg-danger-subtle rounded-full px-2 py-0.5 font-semibold border border-danger/20">High unexplained</span>
+                  <span className="text-[10px] text-danger bg-danger-subtle rounded-full px-2 py-0.5 font-semibold border border-danger/20">{t("scanner.high_unexplained")}</span>
                 )}
               </div>
 
@@ -141,15 +145,15 @@ export default function DivergenceScannerPage() {
                 <div className="grid grid-cols-3 gap-3">
                   <div className="rounded-lg bg-surface-elevated border border-border px-3 py-2 text-center">
                     <div className="text-sm font-mono font-bold text-foreground">{state.data.researchHealth.coverage.pct}%</div>
-                    <div className="text-[10px] text-muted">Coverage</div>
+                    <div className="text-[10px] text-muted">{t("health.coverage")}</div>
                   </div>
                   <div className="rounded-lg bg-surface-elevated border border-border px-3 py-2 text-center">
                     <div className="text-sm font-mono font-bold text-foreground">{state.data.researchHealth.freshness.pct}%</div>
-                    <div className="text-[10px] text-muted">Freshness</div>
+                    <div className="text-[10px] text-muted">{t("health.freshness")}</div>
                   </div>
                   <div className="rounded-lg bg-surface-elevated border border-border px-3 py-2 text-center">
                     <div className="text-sm font-mono font-bold text-foreground">{state.data.researchHealth.sourceHealth.pct}%</div>
-                    <div className="text-[10px] text-muted">Source Health</div>
+                    <div className="text-[10px] text-muted">{t("health.source_health")}</div>
                   </div>
                 </div>
               )}
@@ -167,8 +171,8 @@ export default function DivergenceScannerPage() {
                 <section className="space-y-4">
                   <div className="flex items-center gap-2">
                     <AlertTriangle className="h-4 w-4 text-warning" />
-                    <h2 className="text-sm font-bold uppercase tracking-wider text-warning">Divergences</h2>
-                    <span className="text-xs text-muted">— ranked by severity</span>
+                    <h2 className="text-sm font-bold uppercase tracking-wider text-warning">{t("scanner.divergences")}</h2>
+                    <span className="text-xs text-muted">— {t("scanner.ranked_by")}</span>
                   </div>
                   <div className="grid gap-3">
                     {state.data.cross_signals.rankedDivergences.map((d) => {
@@ -203,7 +207,7 @@ export default function DivergenceScannerPage() {
                 <section className="space-y-3">
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4 text-success" />
-                    <h2 className="text-sm font-bold uppercase tracking-wider text-success">Confirmed Relationships</h2>
+                    <h2 className="text-sm font-bold uppercase tracking-wider text-success">{t("scanner.confirmed")}</h2>
                   </div>
                   <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
                     {state.data.cross_signals.confirmedPatterns.map((c) => {
@@ -225,13 +229,13 @@ export default function DivergenceScannerPage() {
                 <section>
                   <div className="flex items-center gap-2 mb-3">
                     <AlertTriangle className="h-3.5 w-3.5 text-muted" />
-                    <h3 className="text-xs font-semibold uppercase tracking-widest text-muted">Not Assessable ({state.data.not_assessable.length})</h3>
+                    <h3 className="text-xs font-semibold uppercase tracking-widest text-muted">{t("scanner.not_assessable")} ({state.data.not_assessable.length})</h3>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {state.data.not_assessable.map((n) => (
                       <span key={n.id} className="inline-flex items-center gap-1.5 rounded-lg bg-surface border border-border px-3 py-1.5 text-[11px] text-muted">
                         <span className="font-medium text-foreground-secondary">{n.name}</span>
-                        missing: {n.missingSignals.join(", ")}
+                        {t("scanner.missing")}: {n.missingSignals.join(", ")}
                       </span>
                     ))}
                   </div>

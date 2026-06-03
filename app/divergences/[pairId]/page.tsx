@@ -9,9 +9,12 @@ import {
 import { MemoRenderer } from "@/components/research/memo-renderer";
 import type { ResearchOutput } from "@/lib/ai";
 import type { EvidenceStrength } from "@/lib/evidence";
+import { useLocale } from "@/lib/i18n";
+import { LocaleToggle } from "@/components/locale-toggle";
 
 export default function DivergenceDetailPage({ params }: { params: Promise<{ pairId: string }> }) {
   const { pairId } = use(params);
+  const { t } = useLocale();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<ResearchOutput | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -64,17 +67,18 @@ export default function DivergenceDetailPage({ params }: { params: Promise<{ pai
       <header className="flex items-center justify-between px-6 py-3.5 border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <a href="/divergences" className="flex items-center gap-1.5 text-xs text-muted hover:text-foreground-secondary transition-colors">
-            <ArrowLeft className="h-3.5 w-3.5" /> Back to Scanner
+            <ArrowLeft className="h-3.5 w-3.5" /> {t("deepdive.back")}
           </a>
           <span className="text-muted">/</span>
           <span className="font-mono text-xs text-foreground-secondary">{pairId}</span>
         </div>
         <div className="flex items-center gap-3">
+          <LocaleToggle />
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-subtle border border-accent/20">
             <Sparkles className="h-4 w-4 text-accent" />
           </div>
           <button onClick={handleLogout} className="flex items-center gap-1.5 text-xs text-muted hover:text-foreground-secondary transition-colors">
-            <LogOut className="h-3 w-3" />Sign out
+            <LogOut className="h-3 w-3" />{t("nav.sign_out")}
           </button>
         </div>
       </header>
@@ -84,7 +88,7 @@ export default function DivergenceDetailPage({ params }: { params: Promise<{ pai
           {loading && (
             <div className="flex flex-col items-center justify-center py-32">
               <Loader2 className="h-8 w-8 animate-spin text-accent mb-4" />
-              <p className="text-sm text-foreground-secondary">Analyzing {pairId}...</p>
+              <p className="text-sm text-foreground-secondary">{t("deepdive.analyzing")} {pairId}...</p>
             </div>
           )}
           {error && (
@@ -98,24 +102,24 @@ export default function DivergenceDetailPage({ params }: { params: Promise<{ pai
               {data.historicalPatterns && Object.entries(data.historicalPatterns).map(([id, match]: [string, any]) => (
                 match.occurrences > 0 && (
                   <section key={id} className="glass-card p-5 space-y-3">
-                    <h3 className="text-sm font-bold text-foreground">Historical Pattern: {match.currentDescription}</h3>
+                    <h3 className="text-sm font-bold text-foreground">{t("deepdive.historical_pattern")}: {match.currentDescription}</h3>
                     <div className="grid grid-cols-3 gap-3 text-center">
                       <div className="rounded-lg bg-surface px-3 py-2">
                         <div className="text-lg font-mono font-bold text-foreground">{match.occurrences}</div>
-                        <div className="text-[10px] text-muted">Past Occurrences</div>
+                        <div className="text-[10px] text-muted">{t("deepdive.past_occurrences")}</div>
                       </div>
                       <div className="rounded-lg bg-success-subtle px-3 py-2">
                         <div className="text-lg font-mono font-bold text-success">{match.bullishResolution}%</div>
-                        <div className="text-[10px] text-muted">Bullish Resolution</div>
+                        <div className="text-[10px] text-muted">{t("deepdive.bullish_resolution")}</div>
                       </div>
                       <div className="rounded-lg bg-surface px-3 py-2">
                         <div className="text-lg font-mono font-bold text-foreground">{match.avgBtcMove >= 0 ? "+" : ""}{match.avgBtcMove}%</div>
-                        <div className="text-[10px] text-muted">Avg BTC Move</div>
+                        <div className="text-[10px] text-muted">{t("deepdive.avg_btc_move")}</div>
                       </div>
                     </div>
                     {match.recentMatches.length > 0 && (
                       <div className="text-[10px] text-muted space-y-0.5">
-                        <span className="font-medium text-foreground-secondary">Recent matches:</span>
+                        <span className="font-medium text-foreground-secondary">{t("deepdive.recent_matches")}:</span>
                         {match.recentMatches.map((rm: any, i: number) => (
                           <span key={i} className="ml-2">
                             {rm.date}: {rm.btcMoveAfter >= 0 ? "+" : ""}{rm.btcMoveAfter}%
@@ -131,14 +135,14 @@ export default function DivergenceDetailPage({ params }: { params: Promise<{ pai
               {/* V5: Evidence section */}
               {data.v5Evidence && (
                 <section className="glass-card p-5 space-y-3">
-                  <h3 className="text-sm font-bold text-foreground">Evidence Analysis</h3>
+                  <h3 className="text-sm font-bold text-foreground">{t("deepdive.evidence_analysis")}</h3>
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold text-foreground">{data.v5Evidence.topExplanation.label}</span>
                     <EvidenceBadge strength={data.v5Evidence.topExplanation.strength} />
                   </div>
                   {data.v5Evidence.topExplanation.supporting.length > 0 && (
                     <div className="space-y-1.5">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-success">Supporting</span>
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-success">{t("deepdive.supporting")}</span>
                       {data.v5Evidence.topExplanation.supporting.map((p, i) => (
                         <div key={i} className="flex items-start gap-2 text-xs text-foreground-secondary">
                           <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0 mt-0.5" />
@@ -149,7 +153,7 @@ export default function DivergenceDetailPage({ params }: { params: Promise<{ pai
                   )}
                   {data.v5Evidence.topExplanation.contradicting.length > 0 && (
                     <div className="space-y-1.5">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-danger">Contradicting</span>
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-danger">{t("deepdive.contradicting")}</span>
                       {data.v5Evidence.topExplanation.contradicting.map((p, i) => (
                         <div key={i} className="flex items-start gap-2 text-xs text-foreground-secondary">
                           <XCircle className="h-3.5 w-3.5 text-danger shrink-0 mt-0.5" />
@@ -171,14 +175,16 @@ export default function DivergenceDetailPage({ params }: { params: Promise<{ pai
 }
 
 function EvidenceBadge({ strength }: { strength: EvidenceStrength }) {
+  const { t } = useLocale();
   const colors = {
     Strong: "text-success border-success/20 bg-success-subtle",
     Moderate: "text-warning border-warning/20 bg-warning-subtle",
     Weak: "text-muted border-border bg-surface",
   };
+  const label = strength === "Strong" ? t("evidence.strong") : strength === "Moderate" ? t("evidence.moderate") : t("evidence.weak");
   return (
     <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase border ${colors[strength]}`}>
-      {strength}
+      {label}
     </span>
   );
 }

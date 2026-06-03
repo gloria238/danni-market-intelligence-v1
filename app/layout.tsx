@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { Toaster } from "sonner";
+import { ClientProviders } from "@/components/client-providers";
 import "./globals.css";
 
 const inter = Inter({
@@ -34,7 +35,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`dark ${inter.variable} ${jetbrainsMono.variable}`}>
       <body className="min-h-screen antialiased bg-background text-foreground font-sans">
-        {children}
+        <ClientProviders>{children}</ClientProviders>
         <Toaster
           position="bottom-right"
           theme="dark"

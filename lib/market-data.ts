@@ -209,12 +209,13 @@ async function fetchFred(): Promise<Record<string, SignalValue>> {
   const signals: Record<string, SignalValue> = {};
   const fredSignals = Object.values(SIGNAL_REGISTRY).filter((s) => s.source === "fred");
 
-  const results = await Promise.all(
-    fredSignals.map(async (def) => {
-      const pair = await fetchFredSeries(def.sourceId);
-      return { id: def.id, pair };
-    })
-  );
+  // Stagger requests to avoid FRED rate-limiting 4 parallel calls from Vercel's IP.
+  // Without stagger, DGS2 and DGS10 reliably timeout while DXY and FEDFUNDS succeed.
+  const results: Array<{ id: string; pair: { latest: number; previous: number } | null }> = [];
+  for (const def of fredSignals) {
+    const pair = await fetchFredSeries(def.sourceId);
+    results.push({ id: def.id, pair });
+  }
 
   for (const { id, pair } of results) {
     if (pair) {

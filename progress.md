@@ -1,6 +1,6 @@
 # Danni Market Intelligence Terminal — Progress Log
 
-> **Start date:** 2026-06-01 · **Current version:** V2.0 · **14 commits**
+> **Start date:** 2026-06-01 · **Current version:** V3.5 · **20+ commits**
 
 ---
 
@@ -127,35 +127,131 @@
 
 ---
 
-## What V2 Explicitly Excludes
+## Phase 11 — Historical Memory + Pattern Matching (2026-06-03)
 
-| Feature | Reason | When |
-|---------|--------|------|
-| Dashboard (TradingView, price grids) | Not core to intelligence value prop | V3 |
-| RAG (embeddings, vector search) | Context augmentation sufficient | V3 |
-| Multi-Agent orchestration | Single agent + structured prompt works | V3 |
-| Backtesting framework | Needs signal_history DB first | V3 |
-| Alert notifications (email/push) | Premature without DAU | V3 |
-| Portfolio tracker | Different product category | Never (V1) |
-| Real-time WebSocket | Polling sufficient for research cadence | V3+ |
-| Mobile app | Responsive web first | V4 |
-| Redis / BullMQ / cron jobs | Serverless architecture, resolution is passive | Never (V1) |
-| Custom narrative builder | Registry expands based on our data | V3 |
+**Commits:** `2f43233`, `8de9d79`, `d1ed152`, `2202467`, `55496bf`, `c89fd05` — V3
+
+**Built:**
+
+**V3.1 — Signal History Engine:**
+- `lib/db/schema.sql` — New `signal_history` table (UNIQUE on signal_id + recorded_at, RLS: public read, service_role write)
+- `lib/db/signal-history-store.ts` — insertBatchSnapshots, getSignalHistory, getDailySnapshot, getMatchingDays
+- `app/api/cron/signals/route.ts` — Vercel Cron endpoint (daily midnight, CRON_SECRET protected)
+- `vercel.json` — Cron schedule
+- `lib/supabase/server.ts` — createServiceSupabase() for service_role operations
+- Signal history recorded fire-and-forget when users open scanner, or via cron
+
+**V3.2 — Pattern Matching Engine:**
+- `lib/patterns.ts` — matchHistoricalPattern, getPairHistoricalStats, getAllPairStats, matchCurrentDivergences
+- Queries signal_history to answer "when DXY↓ and BTC↓ happened, what followed?"
+- Returns: occurrences, bullishResolution%, bearishResolution%, avgBtcMove, medianResolutionDays
+- Every number traceable to row counts. No normalization. No composite scores.
+
+**V3.3 — Divergence Library:**
+- `app/patterns/page.tsx` — Browsable historical pair database. Most Bullish · Most Bearish · All Pairs.
+- `app/api/patterns/route.ts` — Pattern query API (auth-gated)
+- Each pair: occurrences, resolution bars, avg duration, deep dive link
+
+**Data source debugging:**
+- FRED requests serialized (parallel → sequential) to avoid Vercel IP rate-limiting
+- FRED timeout bumped 8s→15s for individual requests
+- Farside marked as permanently down (Cloudflare bot protection)
+- Diagnostic logging added for all data source failures
 
 ---
 
-## Current Status (V2.0)
+## Phase 12 — Research Health + Evidence Engine (2026-06-03)
 
-- **14 commits** on `main`
-- **49 source files**, ~3,700 lines core logic
-- **11 routes** (landing, login, register, divergences, divergences/[id], research, api/research, api/divergences, auth/callback, 404)
-- **11 signals** across 4 data sources (CoinGecko, FRED, Farside, NewsAPI)
+**Commits:** included in V3 batch — V4 + V5
+
+**Built:**
+
+**V4 Lite — Research Health:**
+- `lib/confidence.ts` — assessResearchHealth → coverage%, freshness%, sourceHealth%
+- Three dimensions, three progress bars. No composite score. No traffic light.
+- Coverage: available/total signals. Freshness: <24h / >48h stale. Source Health: ok/failed.
+
+**V5 Lite — Evidence Engine:**
+- `lib/evidence.ts` — Rule-based explanation templates (6 templates)
+- Strength rules: Strong (≥3 supporting + 0 contradicting), Moderate (≥2 supporting), Weak (else)
+- Each explanation has supportingEvidence[] + contradictingEvidence[]
+- LLM writes rationale text only — never invents or ranks explanations
+- Templates: ETF Outflow, Macro Tailwind Ignored, Risk-Off Rotation, Forced Liquidation, Regulatory Overhang, Unexplained
+
+---
+
+## Phase 13 — Research Timeline (2026-06-03)
+
+**Commit:** included in V3 batch — V5.5
+
+**Built:**
+- `lib/timeline.ts` — Stitches signal_history + divergence_observations into chronological events
+- `app/timeline/page.tsx` — Vertical timeline visualization with color-coded markers
+- Event types: signal_move (green/red), divergence (amber), resolution (green/red/gray)
+- Date range picker + signal pair quick filter chips
+- `app/api/timeline/route.ts` — Timeline API (auth-gated)
+
+---
+
+## Phase 14 — i18n + Security Hardening (2026-06-03)
+
+**Commits:** `950448c`, `1e7eed9` — V3.5
+
+**Built:**
+
+**i18n:**
+- `lib/i18n.tsx` — LocaleProvider + useLocale hook. 80+ keys per language. localStorage persistence.
+- `components/locale-toggle.tsx` — Globe icon toggle in header (EN ↔ 中文)
+- `components/client-providers.tsx` — Client wrapper for server layout
+- All pages updated: scanner, deep dive, patterns, timeline, anomaly card, evidence badge
+- SSR-safe: useLocale returns English fallback during build
+- Narrative names, signal labels, severity levels, evidence labels all translated
+
+**Security fixes:**
+- `/api/research` now auth-gated (was missing — could burn DeepSeek credits)
+- Middleware protects `/patterns`, `/timeline`, `/api/patterns`, `/api/timeline`, `/api/research`
+- API routes return 401 JSON, page routes redirect to `/login`
+- `signal_history` RLS: public read + service_role write with explicit policies
+- Signal history reads use anon key (works without SUPABASE_SERVICE_ROLE_KEY on Vercel)
+
+---
+
+## What V3.5 Explicitly Excludes
+
+| Feature | Reason | When |
+|---------|--------|------|
+| Forecast Engine | Needs 90+ days signal_history | V6 |
+| Evidence Graph (DAG) | Needs V5 stable first | V5.5 |
+| Market Regime classification | Not enough data to justify | V4+ |
+| Multi-Asset expansion (SPX/Oil/SOL) | Scope control | V4+ |
+| Dashboard (TradingView, price grids) | Not core to intelligence value prop | Never |
+| RAG (embeddings, vector search) | Context augmentation sufficient | Never |
+| Multi-Agent orchestration | Single agent + structured prompt works | Never |
+| Alert notifications (email/push) | Premature without DAU | V6+ |
+| Portfolio tracker | Different product category | Never |
+| Real-time WebSocket | Polling sufficient for research cadence | Never |
+| Mobile app | Responsive web first | V6+ |
+| Redis / BullMQ / cron jobs (for divergence) | Serverless, resolution is passive | Never |
+| Custom narrative builder | Registry expands based on our data | V6+ |
+
+---
+
+## Current Status (V3.5)
+
+- **20+ commits** on `main`
+- **60+ source files**, ~5,500 lines core logic
+- **14 routes** (landing, login, register, divergences, divergences/[id], patterns, timeline, research, api/research, api/divergences, api/patterns, api/timeline, api/cron/signals, auth/callback)
+- **11 signals** across 4 data sources (CoinGecko, FRED, Farside [down], NewsAPI)
 - **10 narratives** with required/enhancing signal split + directional logic
 - **7 signal expectations** with correlation types + strength ratings
 - **4 beta coefficients** for move attribution
-- **3 DB tables** (sessions, messages, divergence_observations) with RLS
-- **Build:** ✅ Clean TypeScript, all 11 routes static/dynamic as appropriate
-- **API:** ✅ Question→Memo pipeline. Historical divergence data endpoint.
-- **Auth:** ✅ Sign in, sign up, email confirmation, JWT, RLS.
-- **Design:** ✅ Premium dark theme, oklch tokens, Inter + JetBrains Mono via next/font.
-- **Scanner:** ✅ Auto-scan on load, ranked anomalies, attribution decomposition, deep-dive per pair.
+- **4 DB tables** (sessions, messages, divergence_observations, signal_history) with RLS
+- **6 evidence templates** with rule-based strength scoring
+- **80+ i18n keys** in English + 简体中文
+- **Build:** ✅ Clean TypeScript, all 14 routes static/dynamic as appropriate
+- **API:** ✅ Full reasoning pipeline. Pattern matching API. Timeline API. Cron endpoint.
+- **Auth:** ✅ Sign in, sign up, email confirmation, JWT, RLS. All API routes auth-gated.
+- **Design:** ✅ Premium dark theme, oklch tokens, Inter + JetBrains Mono via next/font. Language toggle.
+- **Scanner:** ✅ Auto-scan on load, ranked anomalies, historical outcomes, evidence badges, research health.
+- **Patterns:** ✅ Browsable pair database with resolution rates and avg durations.
+- **Timeline:** ✅ Chronological event feed with signal pair filtering.

@@ -90,9 +90,9 @@ BTC is actually down 1.27% today.
 
 Implementation: `lib/intent.ts` — rule-based. Detects "why + asset + direction" patterns, rewrites as market analysis, injects factCheckNote into prompt. Not AI. Just regex.
 
-## 5d. Signal → Divergence → Attribution → Narrative → Memo (5-layer stack)
+## 5d. Signal → Divergence → Attribution → Pattern → Health → Evidence → Narrative → Memo (8-layer stack)
 
-The product has five reasoning layers. Never collapse them. Never go straight from signals to LLM.
+The product has eight reasoning layers. Never collapse them. Never go straight from signals to LLM.
 
 ```
 Layer 1: SIGNALS (lib/signals.ts)
@@ -104,12 +104,28 @@ Layer 2: DIVERGENCE DETECTION (lib/expectations.ts)
 Layer 3: SEVERITY + ATTRIBUTION (lib/ranking.ts + lib/attribution.ts + lib/betas.ts)
   Severity: numeric 0-10 per divergence. Attribution: BTC move decomposition.
 
-Layer 4: NARRATIVES (lib/narratives.ts)
+Layer 4: HISTORICAL MEMORY (lib/db/signal-history-store.ts)              ← V3
+  Daily signal snapshots. Powers pattern matching. Vercel Cron + passive.
+
+Layer 5: PATTERN MATCHING (lib/patterns.ts)                              ← V3
+  "When DXY↓ and BTC↓ occurred in the past, what happened next?"
+
+Layer 6: RESEARCH HEALTH (lib/confidence.ts)                             ← V4
+  Coverage · Freshness · Source Health. Three numbers, no composite score.
+
+Layer 7: EVIDENCE ENGINE (lib/evidence.ts)                               ← V5
+  Rule-based explanation ranking. Supporting ✓ / Contradicting ✗.
+
+Layer 8: NARRATIVES (lib/narratives.ts)
   Hard gates. requiredSignals ALL present → Assessable. Otherwise → Not Assessable.
 
-Layer 5: MEMO (lib/ai.ts → memo-renderer.tsx)
-  LLM receives ALL of the above — not just signals. Divergence story leads the summary.
+Layer 9: MEMO (lib/ai.ts → memo-renderer.tsx)
+  LLM receives ALL of the above — not just signals. Evidence story leads the summary.
 ```
+
+### CRITICAL: All computation before LLM
+
+Intent detection, divergence testing, severity scoring, move attribution, pattern matching, health assessment, evidence ranking — all in TypeScript. The LLM synthesizes findings, it does NOT detect them. Never ask the LLM "is there a divergence?" — compute it.
 
 ### CRITICAL: Signal ≠ Evidence
 
@@ -120,9 +136,9 @@ A signal can ONLY serve as evidence for a narrative if it appears in that narrat
 ✅ "BTC ETF Flow +$310M → Institutional Buying" ← ETF flow IS institutional buying evidence
 ```
 
-### CRITICAL: All computation before LLM
+### CRITICAL: Every number is traceable
 
-Intent detection, divergence testing, severity scoring, move attribution — all in TypeScript. The LLM synthesizes findings, it does NOT detect them. Never ask the LLM "is there a divergence?" — compute it.
+No composite scores. No normalization. No black-box metrics. "69% bullish" = "69 of 100 matching days saw BTC higher at T+3." If you can't trace a number to a SQL query, don't display it.
 
 ### CRITICAL: Lead with the story, not the checklist
 
@@ -134,6 +150,8 @@ After login, users land on `/divergences` — not `/research`.
 
 - `/divergences` — Scanner Dashboard. Auto-scans on load. Ranked anomalies.
 - `/divergences/[pairId]` — Deep dive for one signal pair.
+- `/patterns` — Divergence Library. Historical pair stats (V3).
+- `/timeline` — Research Timeline. Chronological event chain (V5.5).
 - `/research` — Still accessible via nav. Chat-style Q&A memo.
 
 When adding a new page or feature, ask: "Does this belong on the scanner (proactive intelligence) or in the chat (deep-dive research)?"
@@ -163,17 +181,32 @@ Beta coefficients in `lib/betas.ts` are practitioner estimates. They are labelle
 ❌ "The DXY-BTC beta is -2.500 with R²=0.83"
 ```
 
-These are for the "explained vs unexplained" dichotomy — directionally useful, not statistically rigorous. Upgradable to rolling correlation when signal_history DB exists (V3).
+These are for the "explained vs unexplained" dichotomy — directionally useful, not statistically rigorous. Upgradable to rolling correlation when signal_history DB has 90+ days of data (V6).
 
-## 5h. Resolution is Passive, No Background Jobs
+## 5h. Resolution is Passive, Signal History uses Cron
 
-Divergence resolution checking happens when the user opens the scanner. No cron, no worker, no Redis, no BullMQ.
+**Divergence resolution** checking happens when the user opens the scanner. No cron, no worker, no Redis, no BullMQ. User-scoped data.
 
-- Load yesterday's persisted divergences from DB
-- Compare to today's detection results
-- Update resolution fields in-place
-- Show resolved divergences in the scanner UI
+**Signal history** uses Vercel Cron (`vercel.json`, `/api/cron/signals`, daily midnight UTC). Public market data, not user-scoped. Also recorded fire-and-forget when users open the scanner.
 
 This keeps the system fully serverless (Vercel-compatible).
+
+## 5i. Evidence Engine is a Rule Engine
+
+Not ML. Not probability. Not prediction. Just evidence aggregation.
+
+```
+Strong   = ≥3 supporting points AND 0 contradicting points
+Moderate = ≥2 supporting points
+Weak     = everything else
+```
+
+If the interviewer asks "why Strong and not Moderate?" you can point to each piece of evidence and count. No black box.
+
+## 5j. i18n is Simple Context + Dictionaries
+
+`lib/i18n.tsx` — LocaleProvider + useLocale hook. Two dictionaries (en/zh), 50+ keys. Persisted to localStorage. SSR-safe: useLocale returns English fallback during build. No external library.
+
+All human-readable UI strings go through `t(key)`. Backend data (narrative descriptions, signal interpretations) remain English for now — they feed into the LLM.
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.

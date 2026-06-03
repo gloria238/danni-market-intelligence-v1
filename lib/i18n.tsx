@@ -112,6 +112,48 @@ const en: Record<string, string> = {
   "evidence.moderate": "Moderate",
   "evidence.weak": "Weak",
   "evidence.top_evidence": "Top evidence",
+
+  // Signal labels
+  "signal.BTC_PRICE": "BTC Price",
+  "signal.BTC_24H_CHANGE": "BTC 24h Change",
+  "signal.ETH_PRICE": "ETH Price",
+  "signal.GOLD_PRICE": "Gold (XAUT)",
+  "signal.DXY_INDEX": "DXY",
+  "signal.US10Y_YIELD": "US 10Y Yield",
+  "signal.US2Y_YIELD": "US 2Y Yield",
+  "signal.FED_FUNDS_RATE": "Fed Funds Rate",
+  "signal.BTC_ETF_FLOW": "BTC ETF Flow",
+  "signal.MARKET_NEWS": "Market News",
+
+  // Narrative names
+  "narrative.ETF_FLOW": "ETF Flows",
+  "narrative.RATE_CUT_EXPECTATIONS": "Rate Cut Expectations",
+  "narrative.USD_WEAKNESS": "USD Weakness",
+  "narrative.MACRO_EASING": "Macro Easing",
+  "narrative.INSTITUTIONAL_BUYING": "Institutional Buying",
+  "narrative.REGULATORY_RELIEF": "Regulatory Relief",
+  "narrative.TECHNICAL_BREAKOUT": "Technical Breakout",
+  "narrative.GEOPOLITICAL_SAFE_HAVEN": "Geopolitical Safe Haven",
+  "narrative.SHORT_SQUEEZE": "Short Squeeze",
+  "narrative.RISK_ON_SENTIMENT": "Risk-On Sentiment",
+
+  // Severity labels
+  "severity.Critical": "Critical",
+  "severity.Notable": "Notable",
+  "severity.Moderate": "Moderate",
+  "severity.Minor": "Minor",
+
+  // Historical note
+  "history.building": "Historical database building — {days} days recorded, need 7+ for meaningful comparison.",
+  "history.no_match": "No matching pattern found in the past {days} days.",
+
+  // Evidence explanation labels
+  "explanation.etf_outflow": "ETF Outflow",
+  "explanation.macro_ignored": "Macro Tailwind Ignored",
+  "explanation.risk_off": "Risk-Off Rotation",
+  "explanation.forced_liquidation": "Forced Liquidation",
+  "explanation.regulatory": "Regulatory Overhang",
+  "explanation.unexplained": "Unexplained Divergence",
 };
 
 const zh: Record<string, string> = {
@@ -199,6 +241,48 @@ const zh: Record<string, string> = {
   "evidence.moderate": "中等",
   "evidence.weak": "弱",
   "evidence.top_evidence": "主证据",
+
+  // Signal labels
+  "signal.BTC_PRICE": "BTC 价格",
+  "signal.BTC_24H_CHANGE": "BTC 24时涨跌",
+  "signal.ETH_PRICE": "ETH 价格",
+  "signal.GOLD_PRICE": "黄金 (XAUT)",
+  "signal.DXY_INDEX": "美元指数",
+  "signal.US10Y_YIELD": "美国10年期国债",
+  "signal.US2Y_YIELD": "美国2年期国债",
+  "signal.FED_FUNDS_RATE": "联邦基金利率",
+  "signal.BTC_ETF_FLOW": "BTC ETF 资金流",
+  "signal.MARKET_NEWS": "市场新闻",
+
+  // Narrative names
+  "narrative.ETF_FLOW": "ETF 资金流",
+  "narrative.RATE_CUT_EXPECTATIONS": "降息预期",
+  "narrative.USD_WEAKNESS": "美元走弱",
+  "narrative.MACRO_EASING": "宏观宽松",
+  "narrative.INSTITUTIONAL_BUYING": "机构买入",
+  "narrative.REGULATORY_RELIEF": "监管放松",
+  "narrative.TECHNICAL_BREAKOUT": "技术突破",
+  "narrative.GEOPOLITICAL_SAFE_HAVEN": "地缘避险",
+  "narrative.SHORT_SQUEEZE": "空头挤压",
+  "narrative.RISK_ON_SENTIMENT": "风险偏好",
+
+  // Severity labels
+  "severity.Critical": "危急",
+  "severity.Notable": "显著",
+  "severity.Moderate": "中等",
+  "severity.Minor": "轻微",
+
+  // Historical note
+  "history.building": "历史数据库构建中 — 已记录 {days} 天，需 7 天以上才能进行有意义的比较。",
+  "history.no_match": "过去 {days} 天内未找到匹配模式。",
+
+  // Evidence explanation labels
+  "explanation.etf_outflow": "ETF 资金流出",
+  "explanation.macro_ignored": "宏观利好被忽视",
+  "explanation.risk_off": "避险轮动",
+  "explanation.forced_liquidation": "强制清算",
+  "explanation.regulatory": "监管压力",
+  "explanation.unexplained": "未解释分歧",
 };
 
 const dictionaries: Record<Locale, Record<string, string>> = { en, zh };

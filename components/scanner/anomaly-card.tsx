@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { severityLabel, severityColor } from "@/lib/ranking";
+import { severityColor } from "@/lib/ranking";
 import { AlertTriangle, TrendingUp, TrendingDown, Minus, ArrowRight, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import type { SignalDirection } from "@/lib/signals";
@@ -33,14 +33,20 @@ function DirIcon({ d }: { d: SignalDirection | null }) {
 }
 
 function EvidenceBadge({ strength }: { strength: EvidenceStrength }) {
+  const { t } = useLocale();
   const colors = {
     Strong: "text-success border-success/20 bg-success-subtle",
     Moderate: "text-warning border-warning/20 bg-warning-subtle",
     Weak: "text-muted border-border bg-surface",
   };
+  const strengthMap: Record<string, string> = {
+    Strong: t("evidence.strong"),
+    Moderate: t("evidence.moderate"),
+    Weak: t("evidence.weak"),
+  };
   return (
     <span className={cn("rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase border", colors[strength])}>
-      {strength}
+      {strengthMap[strength] ?? strength}
     </span>
   );
 }
@@ -48,9 +54,31 @@ function EvidenceBadge({ strength }: { strength: EvidenceStrength }) {
 export function AnomalyCard({ data }: { data: AnomalyCardData }) {
   const { t } = useLocale();
   const score = data.severityScore;
-  const label = severityLabel(score);
+  const sevLabel = score >= 7 ? "Critical" : score >= 5 ? "Notable" : score >= 3 ? "Moderate" : "Minor";
+  const label = t(`severity.${sevLabel}`) ?? sevLabel;
   const aA = data.signalA.direction === "rising" ? "↑" : data.signalA.direction === "falling" ? "↓" : "→";
   const bA = data.signalB.direction === "rising" ? "↑" : data.signalB.direction === "falling" ? "↓" : "→";
+
+  // Translate evidence label
+  const getEvidenceLabel = (lbl: string | undefined): string => {
+    if (!lbl) return "";
+    const map: Record<string, string> = {
+      "ETF Outflow": t("explanation.etf_outflow"),
+      "Macro Tailwind Ignored": t("explanation.macro_ignored"),
+      "Risk-Off Rotation": t("explanation.risk_off"),
+      "Forced Liquidation": t("explanation.forced_liquidation"),
+      "Regulatory Overhang": t("explanation.regulatory"),
+      "Unexplained Divergence": t("explanation.unexplained"),
+    };
+    return map[lbl] ?? lbl;
+  };
+
+  // Translate historical note with variables
+  const getHistoricalNote = (note: string): string => {
+    const match = note.match(/Historical database building — (\d+) days recorded, need (\d+)/);
+    if (match) return t("history.building").replace("{days}", match[1]);
+    return note;
+  };
 
   return (
     <Link href={`/divergences/${data.id}`}>
@@ -114,7 +142,7 @@ export function AnomalyCard({ data }: { data: AnomalyCardData }) {
 
         {/* V3: Historical note (insufficient data) */}
         {data.historicalMatch?.note && (
-          <p className="text-[10px] text-muted italic">{data.historicalMatch.note}</p>
+          <p className="text-[10px] text-muted italic">{getHistoricalNote(data.historicalMatch.note)}</p>
         )}
 
         {/* Footer */}
@@ -129,7 +157,7 @@ export function AnomalyCard({ data }: { data: AnomalyCardData }) {
             {data.evidenceLabel && data.evidenceStrength && (
               <span className="inline-flex items-center gap-1 text-foreground-secondary">
                 <CheckCircle2 className="h-3 w-3" />
-                {data.evidenceLabel}
+                {getEvidenceLabel(data.evidenceLabel)}
                 <EvidenceBadge strength={data.evidenceStrength} />
               </span>
             )}

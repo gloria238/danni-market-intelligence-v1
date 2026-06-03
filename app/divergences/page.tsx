@@ -232,12 +232,20 @@ export default function DivergenceScannerPage() {
                     <h3 className="text-xs font-semibold uppercase tracking-widest text-muted">{t("scanner.not_assessable")} ({state.data.not_assessable.length})</h3>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {state.data.not_assessable.map((n) => (
+                    {state.data.not_assessable.map((n) => {
+                      const nameKey = `narrative.${n.id}`;
+                      const translatedName = t(nameKey) ?? n.name;
+                      const missingTranslated = n.missingSignals.map((s) => {
+                        const sigKey = `signal.${s}`;
+                        return t(sigKey) ?? s;
+                      });
+                      return (
                       <span key={n.id} className="inline-flex items-center gap-1.5 rounded-lg bg-surface border border-border px-3 py-1.5 text-[11px] text-muted">
-                        <span className="font-medium text-foreground-secondary">{n.name}</span>
-                        {t("scanner.missing")}: {n.missingSignals.join(", ")}
+                        <span className="font-medium text-foreground-secondary">{translatedName}</span>
+                        {t("scanner.missing")}: {missingTranslated.join(", ")}
                       </span>
-                    ))}
+                      );
+                    })}
                   </div>
                 </section>
               )}

@@ -43,8 +43,15 @@ async function safeFetch(url: string, timeoutOrOpts?: number | RequestInit, mayb
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(url, { ...opts, signal: controller.signal });
-    return res.ok ? res : null;
-  } catch {
+    if (!res.ok) {
+      console.warn(`[fetch] ${url.slice(0, 80)} → HTTP ${res.status}`);
+      return null;
+    }
+    return res;
+  } catch (err: any) {
+    if (err?.name !== "AbortError") {
+      console.warn(`[fetch] ${url.slice(0, 80)} → ${err?.message || err}`);
+    }
     return null;
   } finally {
     clearTimeout(timeout);
@@ -171,7 +178,7 @@ async function fetchFredSeries(seriesId: string): Promise<{ latest: number; prev
     15000 // FRED is slow from Vercel's IP — needs > 8s
   );
   if (!res) {
-    console.warn(`[fred] ${seriesId} — fetch failed or timed out`);
+    console.warn(`[fred] ${seriesId} — fetch failed, timed out, or non-200`);
     return null;
   }
 
@@ -179,7 +186,7 @@ async function fetchFredSeries(seriesId: string): Promise<{ latest: number; prev
     const data = await res.json();
     const observations = data?.observations;
     if (!observations || observations.length < 2) {
-      console.warn(`[fred] ${seriesId} — no observations returned (count: ${observations?.length ?? 0})`);
+      console.warn(`[fred] ${seriesId} — no observations (count: ${observations?.length ?? 0}, has data key: ${"observations" in (data||{})})`);
       return null;
     }
 
@@ -192,18 +199,19 @@ async function fetchFredSeries(seriesId: string): Promise<{ latest: number; prev
     }
 
     if (values.length < 2) {
-      // Only one valid value — return it with itself as "previous"
       const single = values[0];
       if (single == null) {
-        console.warn(`[fred] ${seriesId} — no valid numeric values in ${observations.length} observations (all "." or NaN)`);
+        console.warn(`[fred] ${seriesId} — no valid numeric values in ${observations.length} obs (sample: ${JSON.stringify(observations[0])})`);
         return null;
       }
-      console.warn(`[fred] ${seriesId} — only 1 valid value, using as latest + previous`);
+      console.warn(`[fred] ${seriesId} — only 1 valid value, using as latest+previous`);
       return { latest: single, previous: single };
     }
 
+    console.log(`[fred] ${seriesId} OK — latest=${values[0]}, prev=${values[1]}`);
     return { latest: values[0], previous: values[1] };
-  } catch {
+  } catch (err: any) {
+    console.error(`[fred] ${seriesId} — parse error:`, err?.message || err);
     return null;
   }
 }

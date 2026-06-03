@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
   const pair = searchParams.get("pair") || undefined;
 
   try {
-    const result = await getTimeline(from, to, pair);
+    const result = await getTimeline(supabase, from, to, pair);
     return NextResponse.json(result);
   } catch (error: any) {
     console.error("[api/timeline] error:", error.message);

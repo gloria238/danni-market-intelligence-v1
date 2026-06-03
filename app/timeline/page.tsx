@@ -34,7 +34,7 @@ export default async function TimelinePage({
   const to = params.to || defaultTo;
   const pair = params.pair;
 
-  const timeline = await getTimeline(from, to, pair);
+  const timeline = await getTimeline(supabase, from, to, pair);
 
   return (
     <div className="flex min-h-screen flex-col">

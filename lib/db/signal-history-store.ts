@@ -11,10 +11,24 @@
 import { createClient } from "@supabase/supabase-js";
 import type { SignalValue } from "@/lib/signals";
 
-function getServiceClient() {
+// Read client: uses anon key. Works everywhere (Vercel, local). RLS allows public
+// SELECT on signal_history — no service_role needed for reads.
+function getReadClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  );
+}
+
+// Write client: uses service_role to bypass RLS for inserts.
+// Only works when SUPABASE_SERVICE_ROLE_KEY is set (cron endpoint, local dev).
+function getWriteClient() {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!key) return null;
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    key,
     { auth: { autoRefreshToken: false, persistSession: false } }
   );
 }
@@ -30,7 +44,8 @@ export interface SignalPoint {
 export async function insertBatchSnapshots(
   signals: Record<string, SignalValue>
 ): Promise<number> {
-  const supabase = getServiceClient();
+  const supabase = getWriteClient();
+  if (!supabase) return 0; // service_role key not configured — skip silently
   const today = new Date().toISOString().slice(0, 10);
   let inserted = 0;
 
@@ -60,7 +75,7 @@ export async function getSignalHistory(
   fromDate: string,
   toDate: string
 ): Promise<SignalPoint[]> {
-  const supabase = getServiceClient();
+  const supabase = getReadClient();
   const { data } = await supabase
     .from("signal_history")
     .select("signal_id, value, delta, source, recorded_at")
@@ -79,7 +94,7 @@ export async function getSignalHistory(
 }
 
 export async function getDailySnapshot(date: string): Promise<SignalPoint[]> {
-  const supabase = getServiceClient();
+  const supabase = getReadClient();
   const { data } = await supabase
     .from("signal_history")
     .select("signal_id, value, delta, source, recorded_at")
@@ -98,7 +113,7 @@ export async function getHistoryAge(): Promise<{
   earliestDate: string;
   totalDays: number;
 }> {
-  const supabase = getServiceClient();
+  const supabase = getReadClient();
 
   const { data: first } = await supabase
     .from("signal_history")
@@ -122,7 +137,7 @@ export async function getMatchingDays(
   fromDate: string,
   toDate: string
 ): Promise<SignalPoint[][]> {
-  const supabase = getServiceClient();
+  const supabase = getReadClient();
 
   // Find dates where signalA had direction = dirA (delta sign matches)
   const { data: rowsA } = await supabase

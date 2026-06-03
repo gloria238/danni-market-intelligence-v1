@@ -4,12 +4,13 @@
 // V5.5: Visualizable research timeline. Pure data assembly — no LLM.
 // Every event is sourced from signal_history or divergence_observations.
 
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-function getClient() {
+// Signal history reads use anon key (RLS allows public SELECT).
+function getAnonClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } }
   );
 }
@@ -48,11 +49,12 @@ export interface TimelineResult {
 /* ——— Query ——— */
 
 export async function getTimeline(
+  userClient: SupabaseClient,
   fromDate: string,
   toDate: string,
   pairId?: string
 ): Promise<TimelineResult> {
-  const client = getClient();
+  const signalClient = getAnonClient();
   const events: TimelineEvent[] = [];
 
   // 1. Significant signal moves from signal_history
@@ -68,7 +70,7 @@ export async function getTimeline(
     BTC_ETF_FLOW: 150,
   };
 
-  const { data: signalRows } = await client
+  const { data: signalRows } = await signalClient
     .from("signal_history")
     .select("*")
     .gte("recorded_at", fromDate)
@@ -115,8 +117,8 @@ export async function getTimeline(
     });
   }
 
-  // 2. Divegence observations from divergence_observations
-  let divQuery = client
+  // 2. Divergence observations from divergence_observations
+  let divQuery = userClient
     .from("divergence_observations")
     .select("*")
     .gte("observed_date", fromDate)

@@ -159,17 +159,26 @@ async function fetchCoinGecko(): Promise<Record<string, SignalValue>> {
 
 async function fetchFredSeries(seriesId: string): Promise<{ latest: number; previous: number } | null> {
   const apiKey = process.env.FRED_API_KEY;
-  if (!apiKey) return null;
+  if (!apiKey) {
+    console.warn(`[fred] skipping ${seriesId} — no FRED_API_KEY`);
+    return null;
+  }
 
   const res = await safeFetch(
     `https://api.stlouisfed.org/fred/series/observations?series_id=${seriesId}&api_key=${apiKey}&file_type=json&limit=30&sort_order=desc`
   );
-  if (!res) return null;
+  if (!res) {
+    console.warn(`[fred] ${seriesId} — fetch failed or timed out`);
+    return null;
+  }
 
   try {
     const data = await res.json();
     const observations = data?.observations;
-    if (!observations || observations.length < 2) return null;
+    if (!observations || observations.length < 2) {
+      console.warn(`[fred] ${seriesId} — no observations returned (count: ${observations?.length ?? 0})`);
+      return null;
+    }
 
     // Walk forward from most recent to find valid numeric values
     const values: number[] = [];
@@ -182,6 +191,11 @@ async function fetchFredSeries(seriesId: string): Promise<{ latest: number; prev
     if (values.length < 2) {
       // Only one valid value — return it with itself as "previous"
       const single = values[0];
+      if (single == null) {
+        console.warn(`[fred] ${seriesId} — no valid numeric values in ${observations.length} observations (all "." or NaN)`);
+        return null;
+      }
+      console.warn(`[fred] ${seriesId} — only 1 valid value, using as latest + previous`);
       return { latest: single, previous: single };
     }
 
@@ -226,7 +240,10 @@ interface FarsideFlow {
 async function fetchFarside(): Promise<Record<string, SignalValue>> {
   const signals: Record<string, SignalValue> = {};
   const res = await safeFetch("https://farside.co.uk/data/btc/all.json");
-  if (!res) return signals;
+  if (!res) {
+    console.warn("[farside] fetch failed or timed out (farside.co.uk may be down)");
+    return signals;
+  }
 
   try {
     const data: FarsideFlow[] = await res.json();

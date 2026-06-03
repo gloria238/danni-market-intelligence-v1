@@ -16,6 +16,9 @@ import {
 } from "@/lib/expectations";
 import { rankObservations, type RankedDivergence } from "@/lib/ranking";
 import { computeAttribution, type AttributionResult, attributionSummary } from "@/lib/attribution";
+import { type PatternMatchResult, formatPatternsForPrompt } from "@/lib/patterns";
+import { type ResearchHealth, formatHealthForPrompt } from "@/lib/confidence";
+import { type EvidenceResult, formatEvidenceForPrompt } from "@/lib/evidence";
 
 const deepseek = new OpenAI({
   apiKey: process.env.DEEPSEEK_API_KEY,
@@ -50,6 +53,12 @@ export interface ResearchOutput {
   cross_signals: CrossSignalAnalysis & { rankedDivergences: RankedDivergence[] };
   attribution: AttributionResult;
   attributionText: string;
+  // V3: Historical pattern analysis
+  historicalPatterns: Record<string, PatternMatchResult>;
+  // V4: Research health
+  researchHealth: ResearchHealth | null;
+  // V5: Evidence engine
+  v5Evidence: EvidenceResult | null;
 }
 
 /* ——— Prompt builder ——— */
@@ -59,12 +68,18 @@ function buildSystemPrompt(
   headlines: { title: string; source: string; url?: string; publishedAt?: string }[],
   intent: IntentResult,
   crossSignal: CrossSignalAnalysis,
-  attr: AttributionResult
+  attr: AttributionResult,
+  patterns: Record<string, PatternMatchResult>,
+  health: ResearchHealth | null,
+  evidence: EvidenceResult | null
 ): string {
   const marketBlock = formatMarketContextForPrompt(snapshot, headlines as any);
   const narrativeBlock = formatNarrativesForPrompt(snapshot.signals);
   const divergenceBlock = formatCrossSignalForPrompt(crossSignal);
   const attrSummary = attributionSummary(attr);
+  const patternBlock = formatPatternsForPrompt(patterns);
+  const healthBlock = formatHealthForPrompt(health);
+  const evidenceBlock = formatEvidenceForPrompt(evidence);
 
   return `You are a senior market analyst at a macro research firm. Your analysis is data-grounded.
 
@@ -79,6 +94,12 @@ ${attrSummary}
 
 ${divergenceBlock}
 
+${patternBlock}
+
+${evidenceBlock}
+
+${healthBlock}
+
 ## NARRATIVE FRAMEWORK
 ${narrativeBlock}
 
@@ -86,11 +107,11 @@ ${marketBlock}
 
 ## OUTPUT — Return ONLY valid JSON
 {
-  "summary": "3-4 sentence summary. LEAD with the most interesting finding. If the attribution model shows most of the move is unexplained, THAT is the story. Reference specific values.",
+  "summary": "3-4 sentence summary. LEAD with the most interesting finding — a divergence with strong historical precedent IS the story. If attribution shows most of the move is unexplained, THAT is the story. If evidence points to a specific explanation, mention it. If health data shows limited coverage/freshness, note the caveat.",
   "narratives": [
     {
       "id": "NARRATIVE_ID",
-      "reasoning": "1-2 sentences with specific values. Reference divergence/attribution analysis if relevant.",
+      "reasoning": "1-2 sentences with specific values. Reference divergence/attribution/historical analysis if relevant.",
       "directional_assessment": "1 sentence on signal direction pattern",
       "indicators": [
         { "label": "DXY", "value": "119.29", "signal": "bearish", "isLive": true, "direction": "falling" }
@@ -105,8 +126,10 @@ ${marketBlock}
 1. ONLY use narratives from "ASSESSABLE". Never "NOT ASSESSABLE".
 2. Lead with the cross-signal story. Divergence > confirmation.
 3. Reference the attribution breakdown: what % is explained vs unexplained.
-4. indicator values must match Available data. isLive:true only for real data.
-5. signal: "bullish"/"bearish"/"neutral" based on data direction.`;
+4. When historical pattern data is available, reference it. "This divergence has resolved bullishly X% of the time historically."
+5. If confidence is limited (LOW coverage or freshness), note the data limitations.
+6. indicator values must match Available data. isLive:true only for real data.
+7. signal: "bullish"/"bearish"/"neutral" based on data direction.`;
 }
 
 /* ——— Main ——— */
@@ -114,7 +137,10 @@ ${marketBlock}
 export async function generateResearch(
   question: string,
   marketCtx: MarketContext,
-  intent: IntentResult
+  intent: IntentResult,
+  patterns: Record<string, PatternMatchResult> = {},
+  health: ResearchHealth | null = null,
+  evidence: EvidenceResult | null = null
 ): Promise<ResearchOutput> {
   const snapshot: MarketSnapshot = marketCtx.snapshot ?? {
     timestamp: Date.now(), signals: {}, availableCount: 0, totalCount: 0,
@@ -144,7 +170,7 @@ export async function generateResearch(
   const response = await deepseek.chat.completions.create({
     model: "deepseek-chat",
     messages: [
-      { role: "system", content: buildSystemPrompt(snapshot, marketCtx.headlines, intent, crossSignal, attribution) },
+      { role: "system", content: buildSystemPrompt(snapshot, marketCtx.headlines, intent, crossSignal, attribution, patterns, health, evidence) },
       { role: "user", content: intent.normalizedQuestion },
     ],
     temperature: 0.5, max_tokens: 2500,
@@ -212,5 +238,8 @@ export async function generateResearch(
     cross_signals: { ...crossSignal, rankedDivergences },
     attribution,
     attributionText: attributionSummary(attribution),
+    historicalPatterns: patterns,
+    researchHealth: health,
+    v5Evidence: evidence,
   };
 }

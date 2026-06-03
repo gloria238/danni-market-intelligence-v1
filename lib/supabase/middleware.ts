@@ -27,17 +27,28 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Protected routes
-  const protectedPaths = ["/research", "/divergences"];
-  const isProtected = protectedPaths.some((p) =>
+  // Protected pages — redirect to login if unauthenticated
+  const protectedPaths = ["/research", "/divergences", "/patterns", "/timeline"];
+  const isProtectedPage = protectedPaths.some((p) =>
     request.nextUrl.pathname.startsWith(p)
   );
 
-  if (isProtected && !user) {
+  if (isProtectedPage && !user) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("redirect", request.nextUrl.pathname);
     return NextResponse.redirect(url);
+  }
+
+  // Protected API — return 401 JSON, never redirect (API consumers need JSON errors)
+  const apiProtected =
+    request.nextUrl.pathname.startsWith("/api/research") ||
+    request.nextUrl.pathname.startsWith("/api/patterns") ||
+    request.nextUrl.pathname.startsWith("/api/timeline") ||
+    request.nextUrl.pathname.startsWith("/api/divergences");
+
+  if (apiProtected && !user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   // Redirect authenticated users away from auth pages → scanner is the new home

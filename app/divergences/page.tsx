@@ -74,6 +74,8 @@ export default function DivergenceScannerPage() {
           <span className="font-semibold text-sm tracking-tight">Market Intelligence</span>
         </div>
         <div className="flex items-center gap-3">
+          <a href="/timeline" className="text-xs text-muted hover:text-foreground-secondary transition-colors">Timeline</a>
+          <a href="/patterns" className="text-xs text-muted hover:text-foreground-secondary transition-colors">Library</a>
           <a href="/research" className="text-xs text-muted hover:text-foreground-secondary transition-colors">Research Chat</a>
           <button onClick={handleLogout} className="flex items-center gap-1.5 text-xs text-muted hover:text-foreground-secondary transition-colors px-3 py-1.5 rounded-lg hover:bg-surface">
             <LogOut className="h-3 w-3" />Sign out
@@ -134,6 +136,24 @@ export default function DivergenceScannerPage() {
                 )}
               </div>
 
+              {/* V4: Research Health */}
+              {state.data.researchHealth && (
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="rounded-lg bg-surface-elevated border border-border px-3 py-2 text-center">
+                    <div className="text-sm font-mono font-bold text-foreground">{state.data.researchHealth.coverage.pct}%</div>
+                    <div className="text-[10px] text-muted">Coverage</div>
+                  </div>
+                  <div className="rounded-lg bg-surface-elevated border border-border px-3 py-2 text-center">
+                    <div className="text-sm font-mono font-bold text-foreground">{state.data.researchHealth.freshness.pct}%</div>
+                    <div className="text-[10px] text-muted">Freshness</div>
+                  </div>
+                  <div className="rounded-lg bg-surface-elevated border border-border px-3 py-2 text-center">
+                    <div className="text-sm font-mono font-bold text-foreground">{state.data.researchHealth.sourceHealth.pct}%</div>
+                    <div className="text-[10px] text-muted">Source Health</div>
+                  </div>
+                </div>
+              )}
+
               {/* Attribution summary */}
               {state.data.attribution && state.data.attribution.btcActualMove !== 0 && (
                 <div className="flex items-center gap-3 rounded-xl border border-border bg-surface-elevated px-5 py-3 text-xs">
@@ -151,22 +171,29 @@ export default function DivergenceScannerPage() {
                     <span className="text-xs text-muted">— ranked by severity</span>
                   </div>
                   <div className="grid gap-3">
-                    {state.data.cross_signals.rankedDivergences.map((d) => (
-                      <AnomalyCard
-                        key={d.id}
-                        data={{
-                          id: d.id,
-                          signalA: d.signalA,
-                          signalB: d.signalB,
-                          description: d.expectation.description,
-                          interpretation: d.interpretation,
-                          severityScore: d.severityScore,
-                          type: "divergence",
-                          resolutionSignal: d.expectation.resolutionSignal,
-                          unexplainedMove: state.data!.attribution?.unexplained,
-                        }}
-                      />
-                    ))}
+                    {state.data.cross_signals.rankedDivergences.map((d) => {
+                      const histMatch = state.data?.historicalPatterns?.[d.id];
+                      const evidenceData = state.data?.v5Evidence;
+                      return (
+                        <AnomalyCard
+                          key={d.id}
+                          data={{
+                            id: d.id,
+                            signalA: d.signalA,
+                            signalB: d.signalB,
+                            description: d.expectation.description,
+                            interpretation: d.interpretation,
+                            severityScore: d.severityScore,
+                            type: "divergence",
+                            resolutionSignal: d.expectation.resolutionSignal,
+                            unexplainedMove: state.data!.attribution?.unexplained,
+                            historicalMatch: histMatch,
+                            evidenceLabel: evidenceData?.topExplanation?.label,
+                            evidenceStrength: evidenceData?.topExplanation?.strength,
+                          }}
+                        />
+                      );
+                    })}
                   </div>
                 </section>
               )}

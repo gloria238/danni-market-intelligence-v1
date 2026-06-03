@@ -2,9 +2,11 @@
 
 import { cn } from "@/lib/utils";
 import { severityLabel, severityColor } from "@/lib/ranking";
-import { AlertTriangle, TrendingUp, TrendingDown, Minus, ArrowRight } from "lucide-react";
+import { AlertTriangle, TrendingUp, TrendingDown, Minus, ArrowRight, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import type { SignalDirection } from "@/lib/signals";
+import type { PatternMatchResult } from "@/lib/patterns";
+import type { EvidenceStrength } from "@/lib/evidence";
 
 export interface AnomalyCardData {
   id: string;
@@ -16,12 +18,30 @@ export interface AnomalyCardData {
   type: "divergence" | "confirmed";
   resolutionSignal: string | null;
   unexplainedMove?: number;
+  // V3: Historical match data
+  historicalMatch?: PatternMatchResult;
+  // V5: Evidence one-liner
+  evidenceLabel?: string;
+  evidenceStrength?: EvidenceStrength;
 }
 
 function DirIcon({ d }: { d: SignalDirection | null }) {
   if (d === "rising") return <TrendingUp className="h-3.5 w-3.5 text-success" />;
   if (d === "falling") return <TrendingDown className="h-3.5 w-3.5 text-danger" />;
   return <Minus className="h-3.5 w-3.5 text-muted" />;
+}
+
+function EvidenceBadge({ strength }: { strength: EvidenceStrength }) {
+  const colors = {
+    Strong: "text-success border-success/20 bg-success-subtle",
+    Moderate: "text-warning border-warning/20 bg-warning-subtle",
+    Weak: "text-muted border-border bg-surface",
+  };
+  return (
+    <span className={cn("rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase border", colors[strength])}>
+      {strength}
+    </span>
+  );
 }
 
 export function AnomalyCard({ data }: { data: AnomalyCardData }) {
@@ -62,6 +82,39 @@ export function AnomalyCard({ data }: { data: AnomalyCardData }) {
           <span className="font-mono text-foreground">{data.signalB.label} {bA}</span>
         </div>
 
+        {/* V3: Historical outcomes bar */}
+        {data.historicalMatch && data.historicalMatch.occurrences > 0 && (
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-[10px] text-muted">
+              <span className="font-medium">
+                {data.historicalMatch.occurrences} past cases · {data.historicalMatch.bullishResolution}% bullish · avg {data.historicalMatch.avgBtcMove >= 0 ? "+" : ""}{data.historicalMatch.avgBtcMove}% BTC
+              </span>
+              <span>~{data.historicalMatch.medianResolutionDays}d resolve</span>
+            </div>
+            <div className="flex h-1.5 rounded-full overflow-hidden bg-border">
+              <div
+                className="bg-success transition-all"
+                style={{ width: `${data.historicalMatch.bullishResolution}%` }}
+              />
+              <div
+                className="bg-danger transition-all"
+                style={{ width: `${data.historicalMatch.bearishResolution}%` }}
+              />
+              <div
+                className="bg-muted/30"
+                style={{
+                  width: `${100 - data.historicalMatch.bullishResolution - data.historicalMatch.bearishResolution}%`,
+                }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* V3: Historical note (insufficient data) */}
+        {data.historicalMatch?.note && (
+          <p className="text-[10px] text-muted italic">{data.historicalMatch.note}</p>
+        )}
+
         {/* Footer */}
         <div className="flex items-center justify-between pt-1">
           <div className="flex items-center gap-2 text-[10px] text-muted">
@@ -70,7 +123,15 @@ export function AnomalyCard({ data }: { data: AnomalyCardData }) {
                 {data.unexplainedMove >= 0 ? "+" : ""}{data.unexplainedMove.toFixed(1)}% unexplained
               </span>
             )}
-            {data.resolutionSignal && (
+            {/* V5: Evidence one-liner */}
+            {data.evidenceLabel && data.evidenceStrength && (
+              <span className="inline-flex items-center gap-1 text-foreground-secondary">
+                <CheckCircle2 className="h-3 w-3" />
+                {data.evidenceLabel}
+                <EvidenceBadge strength={data.evidenceStrength} />
+              </span>
+            )}
+            {!data.evidenceLabel && data.resolutionSignal && (
               <span>Resolve: {data.resolutionSignal}</span>
             )}
           </div>

@@ -46,6 +46,35 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+-- V3: Signal history — daily snapshots for pattern matching
+CREATE TABLE IF NOT EXISTS dannifinance.signal_history (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  signal_id TEXT NOT NULL,
+  value NUMERIC NOT NULL,
+  delta NUMERIC,
+  source TEXT NOT NULL,
+  recorded_at DATE NOT NULL DEFAULT CURRENT_DATE,
+  UNIQUE(signal_id, recorded_at)
+);
+
+CREATE INDEX IF NOT EXISTS idx_signal_history_id_date
+  ON dannifinance.signal_history(signal_id, recorded_at DESC);
+
+-- RLS: public market data — anyone can read, only service_role can write
+ALTER TABLE dannifinance.signal_history ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Public read signal history' AND tablename = 'signal_history' AND schemaname = 'dannifinance') THEN
+    CREATE POLICY "Public read signal history" ON dannifinance.signal_history FOR SELECT USING (true);
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Service role insert signal history' AND tablename = 'signal_history' AND schemaname = 'dannifinance') THEN
+    CREATE POLICY "Service role insert signal history" ON dannifinance.signal_history FOR INSERT WITH CHECK (true);
+  END IF;
+END $$;
+
 -- V1.7: Divergence observations — persistent history
 CREATE TABLE IF NOT EXISTS dannifinance.divergence_observations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

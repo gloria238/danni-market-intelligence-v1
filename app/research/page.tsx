@@ -3,12 +3,15 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowUp, Loader2, LogOut, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowUp, Loader2, LogOut, Sparkles } from "lucide-react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { MemoRenderer } from "@/components/research/memo-renderer";
 import type { ResearchOutput } from "@/lib/ai";
+import { useLocale } from "@/lib/i18n";
+import { LocaleToggle } from "@/components/locale-toggle";
 
 interface Message {
   id: string;
@@ -32,6 +35,7 @@ export default function ResearchPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const router = useRouter();
+  const { t } = useLocale();
 
   useEffect(() => {
     const check = async () => {
@@ -111,9 +115,9 @@ export default function ResearchPage() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      {/* Header — minimal, premium */}
+      {/* Header — matches scanner nav pattern */}
       <header className="flex items-center justify-between px-6 py-3.5 border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-10">
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-subtle border border-accent/20">
             <Sparkles className="h-4 w-4 text-accent" />
           </div>
@@ -121,13 +125,18 @@ export default function ResearchPage() {
             Danni Research
           </span>
         </div>
-        <button
-          onClick={handleLogout}
-          className="flex items-center gap-1.5 text-xs text-muted hover:text-foreground-secondary transition-colors px-3 py-1.5 rounded-lg hover:bg-surface"
-        >
-          <LogOut className="h-3 w-3" />
-          Sign out
-        </button>
+        <div className="flex items-center gap-3">
+          <LocaleToggle />
+          <Link href="/divergences" className="text-xs text-muted hover:text-foreground-secondary transition-colors flex items-center gap-1">
+            <ArrowLeft className="h-3 w-3" />
+            {t("nav.scanner")}
+          </Link>
+          <Link href="/timeline" className="text-xs text-muted hover:text-foreground-secondary transition-colors">{t("nav.timeline")}</Link>
+          <Link href="/patterns" className="text-xs text-muted hover:text-foreground-secondary transition-colors">{t("nav.library")}</Link>
+          <button onClick={handleLogout} className="flex items-center gap-1.5 text-xs text-muted hover:text-foreground-secondary transition-colors px-3 py-1.5 rounded-lg hover:bg-surface">
+            <LogOut className="h-3 w-3" />{t("nav.sign_out")}
+          </button>
+        </div>
       </header>
 
       {/* Messages */}
@@ -150,7 +159,7 @@ export default function ResearchPage() {
                 <button
                   key={example}
                   onClick={() => setQuestion(example)}
-                  className="rounded-lg border border-border bg-surface px-3.5 py-2 text-xs text-foreground-secondary hover:text-foreground hover:border-border-light hover:bg-surface-hover transition-all"
+                  className="rounded-lg border border-border bg-surface px-3.5 py-2 text-xs text-foreground-secondary hover:text-foreground hover:border-border-light hover:bg-surface-hover transition-all cursor-pointer"
                 >
                   {example}
                 </button>

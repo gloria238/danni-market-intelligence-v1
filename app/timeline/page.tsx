@@ -125,7 +125,13 @@ export default function TimelinePage() {
           <div className="rounded-xl border border-border bg-surface-elevated p-12 text-center">
             <Clock className="h-8 w-8 text-muted mx-auto mb-4" />
             <p className="text-sm text-foreground-secondary font-medium">{t("timeline.empty_title")}</p>
-            <p className="text-xs text-muted mt-1">{t("timeline.empty_desc")}</p>
+            <p className="text-xs text-muted mt-1 max-w-sm mx-auto">{t("timeline.empty_desc")}</p>
+            <Link
+              href="/divergences"
+              className="inline-flex items-center gap-1.5 mt-4 rounded-lg bg-accent hover:bg-accent-hover text-white px-4 py-2 text-xs font-semibold transition-colors cursor-pointer"
+            >
+              {t("timeline.back")}
+            </Link>
           </div>
         ) : (
           <div className="relative">

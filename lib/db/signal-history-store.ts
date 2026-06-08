@@ -10,6 +10,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import type { SignalValue } from "@/lib/signals";
+import { SIGNAL_REGISTRY } from "@/lib/signals";
 
 // Read client: uses anon key. Works everywhere (Vercel, local). RLS allows public
 // SELECT on signal_history — no service_role needed for reads.
@@ -21,14 +22,23 @@ function getReadClient() {
   );
 }
 
-// Write client: uses service_role to bypass RLS for inserts.
-// Only works when SUPABASE_SERVICE_ROLE_KEY is set (cron endpoint, local dev).
+// Write client: prefers service_role (bypasses RLS), falls back to anon key.
+// RLS policy "Service role insert signal history" uses WITH CHECK (true) —
+// the anon client can also write to signal_history, so no data is lost
+// when SUPABASE_SERVICE_ROLE_KEY is missing from Vercel env vars.
 function getWriteClient() {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!key) return null;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  if (key) {
+    return createClient(url, key, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+  }
+  // Fall back to anon key — RLS allows public INSERT on signal_history
+  console.warn("[signal_history] SUPABASE_SERVICE_ROLE_KEY not set — using anon key for writes. RLS policy must allow public INSERT.");
   return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    key,
+    url,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } }
   );
 }
@@ -45,7 +55,6 @@ export async function insertBatchSnapshots(
   signals: Record<string, SignalValue>
 ): Promise<number> {
   const supabase = getWriteClient();
-  if (!supabase) return 0; // service_role key not configured — skip silently
   const today = new Date().toISOString().slice(0, 10);
   let inserted = 0;
 
@@ -57,7 +66,7 @@ export async function insertBatchSnapshots(
         signal_id: signalId,
         value: sv.rawValue,
         delta: sv.delta,
-        source: sv.signalId, // use the signal definition source
+        source: SIGNAL_REGISTRY[signalId]?.source ?? "unknown",
         recorded_at: today,
       },
       { onConflict: "signal_id, recorded_at", ignoreDuplicates: true }

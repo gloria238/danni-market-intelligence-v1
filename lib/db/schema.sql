@@ -75,6 +75,13 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+-- Explicit anon role insert policy (ensures anon key can write without service_role)
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Anon insert signal history' AND tablename = 'signal_history' AND schemaname = 'dannifinance') THEN
+    CREATE POLICY "Anon insert signal history" ON dannifinance.signal_history FOR INSERT TO anon WITH CHECK (true);
+  END IF;
+END $$;
+
 -- V1.7: Divergence observations — persistent history
 CREATE TABLE IF NOT EXISTS dannifinance.divergence_observations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

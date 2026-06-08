@@ -72,7 +72,10 @@ export default function PatternsPage() {
             <BarChart3 className="h-8 w-8 text-muted mx-auto mb-4" />
             <p className="text-sm text-foreground-secondary font-medium">{t("library.empty_title")}</p>
             <p className="text-xs text-muted mt-1 max-w-md mx-auto">{t("library.empty_desc")}</p>
-            <Link href="/divergences" className="inline-flex items-center gap-1 mt-4 text-xs text-accent hover:underline">
+            <Link
+              href="/divergences"
+              className="inline-flex items-center gap-1.5 mt-4 rounded-lg bg-accent hover:bg-accent-hover text-white px-4 py-2 text-xs font-semibold transition-colors cursor-pointer"
+            >
               {t("library.empty_cta")} <ArrowRight className="h-3 w-3" />
             </Link>
           </div>

@@ -100,6 +100,7 @@ const en: Record<string, string> = {
   "nav.library": "Library",
   "nav.research_chat": "Research Chat",
   "nav.sign_out": "Sign out",
+  "nav.scanner": "Scanner",
   "nav.market_intelligence": "Market Intelligence",
 
   // Research
@@ -231,6 +232,7 @@ const zh: Record<string, string> = {
   "nav.library": "数据库",
   "nav.research_chat": "研究对话",
   "nav.sign_out": "退出",
+  "nav.scanner": "扫描仪",
   "nav.market_intelligence": "市场情报",
 
   "research.title": "市场研究",

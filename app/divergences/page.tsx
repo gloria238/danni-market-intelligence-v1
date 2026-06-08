@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { AnomalyCard, type AnomalyCardData } from "@/components/scanner/anomaly-card";
 import { severityLabel, severityColor } from "@/lib/ranking";
 import type { ResearchOutput } from "@/lib/ai";
+import Link from "next/link";
 import { useLocale } from "@/lib/i18n";
 import { LocaleToggle } from "@/components/locale-toggle";
 
@@ -78,9 +79,9 @@ export default function DivergenceScannerPage() {
         </div>
         <div className="flex items-center gap-3">
           <LocaleToggle />
-          <a href="/timeline" className="text-xs text-muted hover:text-foreground-secondary transition-colors">{t("nav.timeline")}</a>
-          <a href="/patterns" className="text-xs text-muted hover:text-foreground-secondary transition-colors">{t("nav.library")}</a>
-          <a href="/research" className="text-xs text-muted hover:text-foreground-secondary transition-colors">{t("nav.research_chat")}</a>
+          <Link href="/timeline" className="text-xs text-muted hover:text-foreground-secondary transition-colors">{t("nav.timeline")}</Link>
+          <Link href="/patterns" className="text-xs text-muted hover:text-foreground-secondary transition-colors">{t("nav.library")}</Link>
+          <Link href="/research" className="text-xs text-muted hover:text-foreground-secondary transition-colors">{t("nav.research_chat")}</Link>
           <button onClick={handleLogout} className="flex items-center gap-1.5 text-xs text-muted hover:text-foreground-secondary transition-colors px-3 py-1.5 rounded-lg hover:bg-surface">
             <LogOut className="h-3 w-3" />{t("nav.sign_out")}
           </button>
